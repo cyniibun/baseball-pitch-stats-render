@@ -76,7 +76,7 @@ with col1:
         else:
             st.warning("No pitch data found.")
 
-        if adv_stats:
+        if not adv_stats.empty:
             st.markdown("#### Advanced Pitching Metrics")
             st.dataframe(adv_stats, use_container_width=True)
 
