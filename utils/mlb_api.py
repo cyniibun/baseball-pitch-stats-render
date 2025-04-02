@@ -18,6 +18,6 @@ def fetch_today_schedule():
             games.append({
                 "home": teams["home"]["team"]["name"],
                 "away": teams["away"]["team"]["name"],
-                "game_time": game["gameDate"]
+                "gameTime": game["gameDate"]  # 👈 now matches the frontend expectation
             })
     return games
