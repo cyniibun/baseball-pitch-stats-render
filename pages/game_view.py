@@ -1,7 +1,7 @@
 import streamlit as st
 from urllib.parse import unquote
 from utils.lineup_utils import get_game_lineups, get_lineup_for_game
-from utils.stat_utils import get_pitcher_stats
+from utils.stat_utils import get_pitcher_stats, get_advanced_pitching_metrics
 from datetime import datetime
 import pytz
 
@@ -25,8 +25,8 @@ except Exception:
     date_only = game_time_utc.split("T")[0] if "T" in game_time_utc else "Unknown"
 
 # --- Header ---
-st.title(f"🏟️ {away} @ {home}")
-st.markdown(f"🕒 **Game Time:** {formatted_time}")
+st.title(f"\U0001F3DF️ {away} @ {home}")
+st.markdown(f"\U0001F552 **Game Time:** {formatted_time}")
 st.markdown("---")
 
 # --- Find gamePK ---
@@ -67,16 +67,19 @@ with col1:
     st.subheader(f"{away} Starting Pitcher")
     st.write(away_pitcher or "Not announced yet.")
 
-    
-
     if away_pitcher:
         st.markdown("#### Pitch Arsenal")
         stats_df = get_pitcher_stats(away_pitcher)
-    if not stats_df.empty:
-        st.dataframe(stats_df, use_container_width=True)
-    else:
-        st.warning("No pitch data found.")
-    
+        adv_stats = get_advanced_pitching_metrics(away_pitcher)
+        if not stats_df.empty:
+            st.dataframe(stats_df, use_container_width=True)
+        else:
+            st.warning("No pitch data found.")
+
+        if adv_stats:
+            st.markdown("#### Advanced Pitching Metrics")
+            st.dataframe(adv_stats, use_container_width=True)
+
     st.subheader(f"{away} Batting Lineup")
     if away_hitters:
         for i, batter in enumerate(away_hitters, 1):
@@ -91,11 +94,16 @@ with col2:
 
     if home_pitcher:
         st.markdown("#### Pitch Arsenal")
-        stats_df = get_pitcher_stats(away_pitcher)
-    if not stats_df.empty:
-        st.dataframe(stats_df, use_container_width=True)
-    else:
-        st.warning("No pitch data found.")
+        stats_df = get_pitcher_stats(home_pitcher)
+        adv_stats = get_advanced_pitching_metrics(home_pitcher)
+        if not stats_df.empty:
+            st.dataframe(stats_df, use_container_width=True)
+        else:
+            st.warning("No pitch data found.")
+
+        if adv_stats:
+            st.markdown("#### Advanced Pitching Metrics")
+            st.dataframe(adv_stats, use_container_width=True)
 
     st.subheader(f"{home} Batting Lineup")
     if home_hitters:
