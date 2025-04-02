@@ -9,20 +9,9 @@ from pybaseball import statcast_pitcher, statcast_batter, playerid_lookup
 from datetime import datetime
 from pytz import timezone
 from functools import lru_cache
-from utils.schedule_utils import get_today_schedule
 
 st.set_page_config(page_title="Pitcher vs Batter Analyzer", layout="wide")
 st.title("⚾ Pitcher vs Batter Matchup Analyzer (Statcast Live)")
-
-# Display today's matchups
-st.subheader("📅 Today's MLB Games")
-today_games = get_today_schedule()
-if today_games:
-    for game in today_games:
-        matchup = f"{game['team']} vs {game['opponent']} @ {game['time']}"
-        st.markdown(f"- {matchup}")
-else:
-    st.info("No MLB games found for today.")
 
 st.markdown("""
 Enter the names of a pitcher and a batter to pull real-time Statcast data and generate a pitch-by-pitch matchup breakdown:
@@ -107,6 +96,18 @@ if st.button("Run Matchup Analysis"):
 
             for stat in ["K%", "Whiff%", "PutAway%", "OBA", "BA", "SLG"]:
                 combined[f"{stat} Delta"] = combined[f"{stat}_Pitcher"] - combined[f"{stat}_Batter"]
+
+            # Full pitch name mapping
+            pitch_name_map = {
+                "CH": "Changeup",
+                "CU": "Curveball",
+                "FC": "Cutter",
+                "FF": "Four-Seam Fastball",
+                "SI": "Sinker",
+                "SL": "Slider",
+                "ST": "Sweeper"
+            }
+            combined.index = combined.index.to_series().map(pitch_name_map).fillna(combined.index)
 
             # Formatting logic
             def color_deltas(val):
