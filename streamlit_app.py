@@ -61,18 +61,20 @@ def calculate_pitch_stats(df, role):
         "estimated_ba_using_speedangle": "mean",
         "estimated_woba_using_speedangle": "mean",
         "estimated_slg_using_speedangle": "mean",
-        "description": lambda x: sum(x.str.contains("swinging_strike", case=False)),
+        "description": lambda x: sum(x.str.contains("swinging_strike", case=False))
     }).rename(columns={
         "description": "Whiffs",
         "events": "Ks",
         "pitch_type": "Pitches"
     })
+
     stats["K%"] = stats["Ks"] / stats["Pitches"] * 100
-    stats["Whiff%"] = stats["Whiffs"] / stats["Pitches"] * 100
     stats["PutAway%"] = stats["Ks"] / stats["Pitches"] * 100
+    stats["Whiff%"] = stats["Whiffs"] / stats["Pitches"] * 100
     stats["OBA"] = stats["estimated_woba_using_speedangle"]
     stats["BA"] = stats["estimated_ba_using_speedangle"]
     stats["SLG"] = stats["estimated_slg_using_speedangle"]
+
     stats = stats[["K%", "Whiff%", "PutAway%", "OBA", "BA", "SLG"]]
     stats.columns = [f"{col}_{role}" for col in stats.columns]
     return stats
