@@ -45,4 +45,15 @@ col1, col2 = st.columns(2)
 with col1:
     st.subheader(f"{away} Lineup")
     if away_lineup:
-        for player in away_lineup_
+        for player in away_lineup:
+            st.markdown(f"- {player}")
+    else:
+        st.info("Lineup not available yet.")
+
+with col2:
+    st.subheader(f"{home} Lineup")
+    if home_lineup:
+        for player in home_lineup:
+            st.markdown(f"- {player}")
+    else:
+        st.info("Lineup not available yet.")
