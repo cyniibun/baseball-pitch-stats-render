@@ -89,6 +89,14 @@ with col2:
     st.subheader(f"{home} Starting Pitcher")
     st.write(home_pitcher or "Not announced yet.")
 
+    if home_pitcher:
+        st.markdown("#### Pitch Arsenal")
+        stats_df = get_pitcher_stats(away_pitcher)
+    if not stats_df.empty:
+        st.dataframe(stats_df, use_container_width=True)
+    else:
+        st.warning("No pitch data found.")
+
     st.subheader(f"{home} Batting Lineup")
     if home_hitters:
         for i, batter in enumerate(home_hitters, 1):
