@@ -76,4 +76,11 @@ with col1:
 with col2:
     home_pitcher, home_hitters = extract_lineup(home_lineup, home, allow_pitcher_in_lineup=include_pitcher_home)
     st.subheader(f"{home} Starting Pitcher")
-    st.write(home_pitcher or "Not announced yet_
+    st.write(home_pitcher or "Not announced yet.")
+
+    st.subheader(f"{home} Batting Lineup")
+    if home_hitters:
+        for i, batter in enumerate(home_hitters, 1):
+            st.markdown(f"{i}. {batter}")
+    else:
+        st.info("Batting order not available yet.")
