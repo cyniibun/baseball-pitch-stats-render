@@ -1,6 +1,7 @@
 import streamlit as st
 from urllib.parse import unquote
 from utils.lineup_utils import get_game_lineups, get_lineup_for_game
+from utils.stat_utils import get_pitcher_stats
 from datetime import datetime
 import pytz
 
@@ -65,6 +66,16 @@ with col1:
     away_pitcher, away_hitters = extract_lineup(away_lineup, away, allow_pitcher_in_lineup=False)
     st.subheader(f"{away} Starting Pitcher")
     st.write(away_pitcher or "Not announced yet.")
+
+    
+
+    if away_pitcher:
+        st.markdown("#### Pitch Arsenal")
+        stats_df = get_pitcher_stats(away_pitcher)
+    if not stats_df.empty:
+        st.dataframe(stats_df, use_container_width=True)
+    else:
+        st.warning("No pitch data found.")
     
     st.subheader(f"{away} Batting Lineup")
     if away_hitters:
