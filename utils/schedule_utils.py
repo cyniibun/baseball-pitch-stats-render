@@ -43,5 +43,5 @@ def get_today_schedule():
             seen.add(matchup_key)
             unique_games.append(game)
 
+    print(f"[DEBUG] Total unique games: {len(unique_games)}")  # ✅ moved inside
     return unique_games
-print(f"[DEBUG] Total unique games: {len(unique_games)}")
