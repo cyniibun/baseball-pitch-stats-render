@@ -5,12 +5,12 @@ from urllib.parse import unquote
 
 st.set_page_config(page_title="Matchup View", layout="wide")
 
-# 🔍 Read query params from URL using updated method
+# ✅ Use st.query_params safely (they are already strings, not lists)
 query_params = st.query_params
 
-home = unquote(query_params.get("home", ["Unknown"])[0])
-away = unquote(query_params.get("away", ["Unknown"])[0])
-game_time = query_params.get("time", ["Unknown"])[0]
+home = unquote(query_params.get("home", "Unknown"))
+away = unquote(query_params.get("away", "Unknown"))
+game_time = query_params.get("time", "Unknown")
 
 # 🧾 Display Matchup Header
 st.title(f"🏟️ {away} @ {home}")
