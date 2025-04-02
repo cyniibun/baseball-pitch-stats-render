@@ -1,8 +1,6 @@
 services:
   - type: web
-    name: pitcher-vs-batter-analyzer
+    name: pitcher-vs-batter
     env: python
-    region: oregon
-    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: streamlit run streamlit_app.py --server.port 10000 --server.enableCORS false
