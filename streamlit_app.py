@@ -5,28 +5,52 @@ import io
 import openpyxl
 from openpyxl.styles import PatternFill, Font
 from openpyxl.utils.dataframe import dataframe_to_rows
+from io import StringIO
 
 st.set_page_config(page_title="Pitcher vs Batter Analyzer", layout="wide")
 st.title("⚾ Pitcher vs Batter Matchup Analyzer")
 
 st.markdown("""
-Upload CSV files for both the **pitcher** and **batter**, each containing pitch-specific statistics.  
-This app will generate a matchup table showing delta values — highlighting which side has the advantage.
+Upload **CSV files** or paste **CSV-formatted text** for both the **pitcher** and **batter** stats below. The app will generate a color-coded matchup table:
 
-**Color Key for Deltas:**
-- 🔴 Negative = Pitcher Advantage  
-- 🟢 Positive = Batter Advantage
+- 🔴 Negative delta = Pitcher Advantage
+- 🟢 Positive delta = Batter Advantage
 """)
 
 # Upload inputs
 pitcher_file = st.file_uploader("📤 Upload Pitcher CSV", type="csv")
 batter_file = st.file_uploader("📤 Upload Batter CSV", type="csv")
 
-if pitcher_file and batter_file:
-    try:
-        pitcher_df = pd.read_csv(pitcher_file)
-        batter_df = pd.read_csv(batter_file)
+# Text paste alternative
+st.subheader("📝 Paste Pitcher CSV Data (optional)")
+pitcher_text = st.text_area("Paste CSV-formatted text for pitcher stats")
 
+st.subheader("📝 Paste Batter CSV Data (optional)")
+batter_text = st.text_area("Paste CSV-formatted text for batter stats")
+
+# Attempt to load data from files or text
+pitcher_df = None
+batter_df = None
+
+try:
+    if pitcher_file:
+        pitcher_df = pd.read_csv(pitcher_file)
+    elif pitcher_text:
+        pitcher_df = pd.read_csv(StringIO(pitcher_text))
+except Exception as e:
+    st.error(f"❌ Error reading pitcher data: {e}")
+
+try:
+    if batter_file:
+        batter_df = pd.read_csv(batter_file)
+    elif batter_text:
+        batter_df = pd.read_csv(StringIO(batter_text))
+except Exception as e:
+    st.error(f"❌ Error reading batter data: {e}")
+
+# Proceed if both datasets are available
+if pitcher_df is not None and batter_df is not None:
+    try:
         # Merge and compute deltas
         merged = pd.merge(pitcher_df, batter_df, on="Pitch", suffixes=("_Pitcher", "_Batter"))
 
@@ -46,7 +70,6 @@ if pitcher_file and batter_file:
         delta_cols = [col for col in merged.columns if "Delta" in col]
         styled = merged.style.applymap(color_deltas, subset=delta_cols)
 
-        # Show styled table
         st.subheader("📊 Matchup Analysis Table")
         st.dataframe(styled, use_container_width=True)
 
@@ -82,4 +105,4 @@ if pitcher_file and batter_file:
     except Exception as e:
         st.error(f"❌ Error processing data: {e}")
 else:
-    st.info("📂 Please upload both a pitcher and a batter CSV to begin.")
+    st.info("📂 Please upload or paste both pitcher and batter data to begin analysis.")
