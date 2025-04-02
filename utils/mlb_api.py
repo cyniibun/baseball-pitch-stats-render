@@ -1,12 +1,13 @@
-# utils/mlb_api.py
-
 import requests
 from datetime import datetime
 import pytz
 
 def fetch_today_schedule():
+    # Set timezone to Eastern Time
     eastern = pytz.timezone("US/Eastern")
     today = datetime.now(eastern).strftime("%Y-%m-%d")
+
+    # MLB API endpoint for the schedule
     url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={today}"
     response = requests.get(url)
     data = response.json()
@@ -18,6 +19,6 @@ def fetch_today_schedule():
             games.append({
                 "home": teams["home"]["team"]["name"],
                 "away": teams["away"]["team"]["name"],
-                "gameTime": game["gameDate"]  # 👈 now matches the frontend expectation
+                "gameTime": game["gameDate"]
             })
     return games

@@ -1,21 +1,16 @@
-# pages/games_today.py
-
 import streamlit as st
 from utils.mlb_api import fetch_today_schedule
 
-st.set_page_config(page_title="Today's MLB Schedule", layout="wide")
-st.title("📅 MLB Games Today")
+def show_schedule_page():
+    st.title("📅 Today's MLB Games")
 
-with st.spinner("Fetching today's schedule..."):
     games = fetch_today_schedule()
 
-if not games:
-    st.warning("No games scheduled for today or failed to fetch schedule.")
-else:
-    for game in games:
-        st.markdown(f"""
-        ### {game['away']} @ {game['home']}
-        ⏰ **Game Time (UTC):** {game['gameTime']}  
-        🆔 **Game ID:** `{game['gamePk']}`
-        ---  
-        """)
+    if not games:
+        st.info("No games scheduled for today.")
+    else:
+        for game in games:
+            matchup = f"{game['away']} at {game['home']}"
+            game_time = game['gameTime']
+            st.markdown(f"### {matchup}")
+            st.text(f"Time: {game_time}")
