@@ -1,6 +1,11 @@
 services:
   - type: web
-    name: pitcher-vs-batter
-    env: python
+    name: baseball-pitch-stats
+    runtime: python
+    plan: professional  # you're already on this
     buildCommand: pip install -r requirements.txt
-    startCommand: streamlit run streamlit_app.py --server.port 10000 --server.enableCORS false
+    startCommand: streamlit run streamlit_app.py --server.port $PORT --server.enableCORS false
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10
+    autoDeploy: true
