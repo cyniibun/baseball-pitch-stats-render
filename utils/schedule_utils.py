@@ -1,4 +1,8 @@
 def get_today_schedule():
+    from pybaseball import schedule_and_record
+    from datetime import datetime
+    import pandas as pd   # Needed for datetime parsing
+    import pytz           # 🔁 This is the missing import
     import traceback  # Add for detailed logging
     eastern = pytz.timezone("US/Eastern")
     today = datetime.now(eastern).date()
