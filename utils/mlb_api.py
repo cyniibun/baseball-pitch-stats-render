@@ -22,3 +22,5 @@ def fetch_today_schedule():
                 "gameTime": game["gameDate"]
             })
     return games
+    print("[DEBUG] Fetched games from MLB API:", games)
+
