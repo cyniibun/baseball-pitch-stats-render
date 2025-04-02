@@ -5,8 +5,8 @@ from urllib.parse import unquote
 
 st.set_page_config(page_title="Matchup View", layout="wide")
 
-# 🔍 Read query params from URL
-query_params = st.experimental_get_query_params()
+# 🔍 Read query params from URL using updated method
+query_params = st.query_params
 
 home = unquote(query_params.get("home", ["Unknown"])[0])
 away = unquote(query_params.get("away", ["Unknown"])[0])
