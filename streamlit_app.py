@@ -77,6 +77,32 @@ def calculate_pitch_stats(df, role):
     stats.columns = [f"{col}_{role}" for col in stats.columns]
     return stats
 
+# --- Color logic ---
+def highlight_deltas(val):
+    if pd.isnull(val):
+        return "background-color: #333333; color: #ffffff;"
+
+    try:
+        val = float(val)
+    except ValueError:
+        return ""
+
+    cap = 10
+    intensity = min(abs(val), cap) / cap
+
+    if val > 0:
+        red = int(34 - 20 * intensity)
+        green = int(85 + (170 * intensity))
+        blue = int(34 - 20 * intensity)
+    elif val < 0:
+        red = int(102 + (153 * intensity))
+        green = int(17 - 15 * intensity)
+        blue = int(17 - 15 * intensity)
+    else:
+        return "background-color: #333333; color: #ffffff; font-weight: bold;"
+
+    return f"background-color: rgb({red},{green},{blue}); color: #ffffff; font-weight: bold;"
+
 # --- App logic ---
 if st.button("Run Matchup Analysis"):
     pid = get_player_id(pitcher_name)
@@ -97,23 +123,23 @@ if st.button("Run Matchup Analysis"):
             for stat in ["K%", "Whiff%", "PutAway%", "OBA", "BA", "SLG"]:
                 combined[f"{stat} Delta"] = combined[f"{stat}_Pitcher"] - combined[f"{stat}_Batter"]
 
-            # Formatting logic
-            def color_deltas(val):
-                if pd.isnull(val): return ""
-                if val <= -45: return "background-color:#990000; color:white"
-                elif val <= -20: return "background-color:#e06666"
-                elif val < 0: return "background-color:#f4cccc"
-                elif val <= 20: return "background-color:#d9ead3"
-                elif val <= 45: return "background-color:#93c47d"
-                else: return "background-color:#38761d; color:white"
+            pitch_name_map = {
+                "CH": "Changeup",
+                "CU": "Curveball",
+                "FC": "Cutter",
+                "FF": "Four-Seam Fastball",
+                "SI": "Sinker",
+                "SL": "Slider",
+                "ST": "Sweeper"
+            }
+            combined.index = combined.index.map(lambda x: pitch_name_map.get(x, x))
 
             delta_cols = [col for col in combined.columns if "Delta" in col]
-            styled = combined.style.applymap(color_deltas, subset=delta_cols).format("{:.2f}")
+            styled = combined.style.applymap(highlight_deltas, subset=delta_cols).format("{:.2f}")
 
             st.subheader("📊 Matchup Table")
             st.dataframe(styled, use_container_width=True)
 
-            # --- Downloads ---
             st.download_button("Download CSV", combined.to_csv().encode("utf-8"), "matchup_analysis.csv")
 
             output = io.BytesIO()
