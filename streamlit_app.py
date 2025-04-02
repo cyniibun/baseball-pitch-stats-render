@@ -9,6 +9,7 @@ from pybaseball import statcast_pitcher, statcast_batter, playerid_lookup
 from datetime import datetime
 from pytz import timezone
 from functools import lru_cache
+from utils.schedule_utils import get_today_schedule
 
 st.set_page_config(page_title="Pitcher vs Batter Analyzer", layout="wide")
 st.title("⚾ Pitcher vs Batter Matchup Analyzer (Statcast Live)")
