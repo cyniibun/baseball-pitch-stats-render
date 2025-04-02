@@ -1,6 +1,17 @@
 import streamlit as st
 from urllib.parse import quote
 from utils.mlb_api import fetch_today_schedule
+from datetime import datetime
+import pytz
+
+def format_utc_to_est(utc_str):
+    try:
+        utc_time = datetime.fromisoformat(utc_str.replace("Z", "+00:00"))
+        est = pytz.timezone("US/Eastern")
+        est_time = utc_time.astimezone(est)
+        return est_time.strftime("%B %d, %Y at %I:%M %p ET")
+    except:
+        return utc_str  # fallback if parsing fails
 
 st.set_page_config(page_title="Today's MLB Games", layout="wide")
 st.title("📅 Today's MLB Games")
@@ -23,5 +34,5 @@ else:
 
         with st.container():
             st.markdown(f"### [{away} @ {home}]({link})")
-            st.markdown(f"🕒 **Game Time (UTC):** {game_time}")
+            st.markdown(f"🕒 **Game Time:** {format_utc_to_est(game['gameTime'])}")
             st.markdown("---")
