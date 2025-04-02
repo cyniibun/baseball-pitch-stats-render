@@ -1,5 +1,6 @@
 import streamlit as st
 from urllib.parse import unquote
+from utils.lineup_utils import get_game_lineups, get_lineup_for_game
 from datetime import datetime
 import pytz
 
@@ -29,10 +30,31 @@ st.markdown("---")
 # Placeholder columns
 col1, col2 = st.columns(2)
 
+# Parse date from time param (e.g. 2025-04-02T16:40:00Z → 2025-04-02)
+date_only = game_time.split("T")[0]
+
+# Find gamePk by matching teams
+lineup_map = get_game_lineups(date_only)
+key = f"{away} @ {home}"
+game_pk = lineup_map.get(key, {}).get("gamePk")
+
+if game_pk:
+    away_lineup, home_lineup = get_lineup_for_game(game_pk)
+else:
+    away_lineup, home_lineup = [], []
+
 with col1:
     st.subheader(f"{away} Lineup")
-    st.info("Lineup and pitcher data coming soon!")
+    if away_lineup:
+        for player in away_lineup:
+            st.markdown(f"- {player}")
+    else:
+        st.info("Lineup not available yet.")
 
 with col2:
     st.subheader(f"{home} Lineup")
-    st.info("Lineup and pitcher data coming soon!")
+    if home_lineup:
+        for player in home_lineup:
+            st.markdown(f"- {player}")
+    else:
+        st.info("Lineup not available yet.")
