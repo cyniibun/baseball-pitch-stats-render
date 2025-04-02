@@ -1,9 +1,12 @@
+# file: utils/schedule_utils.py
+
+from pybaseball import schedule_and_record
+from datetime import datetime
+import pandas as pd
+import pytz
+import time
+
 def get_today_schedule():
-    from pybaseball import schedule_and_record
-    from datetime import datetime
-    import pandas as pd   # Needed for datetime parsing
-    import pytz           # 🔁 This is the missing import
-    import traceback  # Add for detailed logging
     eastern = pytz.timezone("US/Eastern")
     today = datetime.now(eastern).date()
 
@@ -14,13 +17,14 @@ def get_today_schedule():
     ]
 
     games_today = []
+    start_time = time.time()
 
     for team in all_teams:
         try:
-            print(f"[DEBUG] Fetching schedule for {team}...")
+            print(f"[DEBUG] Fetching schedule for: {team}")
             schedule = schedule_and_record(datetime.now().year, team)
-            schedule['Date'] = pd.to_datetime(schedule['Date'])  # Ensure datetime type
             todays_games = schedule[schedule['Date'].dt.date == today]
+
             for _, row in todays_games.iterrows():
                 games_today.append({
                     'team': team,
@@ -30,11 +34,9 @@ def get_today_schedule():
                     'result': row['Result'],
                 })
         except Exception as e:
-            print(f"[ERROR] Failed to fetch for {team}: {e}")
-            traceback.print_exc()
+            print(f"[ERROR] Failed for {team}: {e}")
             continue
 
-    # Deduplicate
     seen = set()
     unique_games = []
     for game in games_today:
@@ -44,7 +46,5 @@ def get_today_schedule():
             unique_games.append(game)
 
     print(f"[DEBUG] Total unique games: {len(unique_games)}")
-    if unique_games:
-        print(f"[DEBUG] Sample game: {unique_games[0]}")
-
+    print(f"[DEBUG] Finished in {time.time() - start_time:.2f} seconds")
     return unique_games
