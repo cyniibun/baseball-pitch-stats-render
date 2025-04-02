@@ -14,7 +14,7 @@ if not games:
 else:
     for game in games:
         st.markdown(f"""
-        ### {game['awayTeam']} @ {game['homeTeam']}
+        ### {game['away']} @ {game['home']}
         ⏰ **Game Time (UTC):** {game['gameTime']}  
         🆔 **Game ID:** `{game['gamePk']}`
         ---  
