@@ -44,3 +44,4 @@ def get_today_schedule():
             unique_games.append(game)
 
     return unique_games
+print(f"[DEBUG] Total unique games: {len(unique_games)}")
