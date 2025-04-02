@@ -1,15 +1,8 @@
-# file: utils/schedule_utils.py
-
-from pybaseball import schedule_and_record
-from datetime import datetime
-import pytz
-
 def get_today_schedule():
-    # Get today's date in Eastern Time
+    import traceback  # Add for detailed logging
     eastern = pytz.timezone("US/Eastern")
     today = datetime.now(eastern).date()
 
-    # pybaseball requires a team and year, so we'll iterate all teams
     all_teams = [
         'ARI', 'ATL', 'BAL', 'BOS', 'CHC', 'CWS', 'CIN', 'CLE', 'COL', 'DET',
         'HOU', 'KC', 'LAA', 'LAD', 'MIA', 'MIL', 'MIN', 'NYM', 'NYY', 'OAK',
@@ -20,21 +13,24 @@ def get_today_schedule():
 
     for team in all_teams:
         try:
+            print(f"[DEBUG] Fetching schedule for {team}...")
             schedule = schedule_and_record(datetime.now().year, team)
+            schedule['Date'] = pd.to_datetime(schedule['Date'])  # Ensure datetime type
             todays_games = schedule[schedule['Date'].dt.date == today]
             for _, row in todays_games.iterrows():
-                opponent = row['Opp']
                 games_today.append({
                     'team': team,
-                    'opponent': opponent,
+                    'opponent': row['Opp'],
                     'home': row['Home'],
                     'time': row['Time'],
                     'result': row['Result'],
                 })
-        except:
+        except Exception as e:
+            print(f"[ERROR] Failed to fetch for {team}: {e}")
+            traceback.print_exc()
             continue
 
-    # Deduplicate mirror matchups
+    # Deduplicate
     seen = set()
     unique_games = []
     for game in games_today:
@@ -43,5 +39,8 @@ def get_today_schedule():
             seen.add(matchup_key)
             unique_games.append(game)
 
-    print(f"[DEBUG] Total unique games: {len(unique_games)}")  # ✅ moved inside
+    print(f"[DEBUG] Total unique games: {len(unique_games)}")
+    if unique_games:
+        print(f"[DEBUG] Sample game: {unique_games[0]}")
+
     return unique_games
