@@ -204,3 +204,40 @@ def get_game_state(game_pk):
     except Exception as e:
         print(f"[ERROR] Failed to parse game state: {e}")
         return None
+
+def get_all_team_player_ids():
+    """
+    Returns a dictionary of all MLB teams and their players with IDs and positions:
+    {
+        "ATL": [{"id": 123, "name": "John Smith", "position": "P"}, ...],
+        ...
+    }
+    """
+    team_ids = [
+        109, 110, 111, 112, 113, 114, 115, 116, 117, 118,
+        119, 120, 121, 133, 134, 135, 136, 137, 138, 139,
+        140, 141, 142, 143, 144, 145, 146, 147, 158, 159
+    ]
+
+    all_players = {}
+
+    for team_id in team_ids:
+        url = f"https://statsapi.mlb.com/api/v1/teams/{team_id}/roster"
+        try:
+            res = requests.get(url)
+            data = res.json()
+
+            players = []
+            for entry in data.get("roster", []):
+                players.append({
+                    "id": entry["person"]["id"],
+                    "name": entry["person"]["fullName"],
+                    "position": entry["position"]["abbreviation"]
+                })
+
+            all_players[team_id] = players
+        except Exception as e:
+            print(f"[Error] Team ID {team_id}: {e}")
+            all_players[team_id] = []
+
+    return all_players

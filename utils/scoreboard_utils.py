@@ -11,55 +11,81 @@ def render_scoreboard(game_pk, home_team="Home", away_team="Away", autorefresh=T
         st.info("Live data not available.")
         return
 
-    status = state.get("status", "").lower()
+    # Default values
+    status = ""
+    is_final = False
+    is_walkoff = False
+    inning = state.get("inning", 0)
+    half = state.get("half", "").lower()
+    count = state.get("count", "0-0")
+    outs = state.get("outs", 0)
+    bases = state.get("bases", [])
     linescore = state.get("linescore", {})
     away = linescore.get("away", {})
     home = linescore.get("home", {})
-
-    home_score = home.get("runs", 0)
     away_score = away.get("runs", 0)
+    home_score = home.get("runs", 0)
 
-    # Determine winner
-    if home_score > away_score:
-        winner = "home"
-    elif away_score > home_score:
-        winner = "away"
-    else:
-        winner = "tie"
+    # Final status from API
+    if "status" in state:
+        status = state["status"].get("detailedState", "").lower()
 
-    winner_style = "color: #0af; font-weight: bold;"
-    loser_style = "color: #999;"
-    tie_style = "color: #ccc; font-style: italic;"
+    # Check official or inferred final status
+    if status in ["final", "completed", "game over", "postgame", "completed early"]:
+        is_final = True
+    elif half == "bottom" and outs == 3 and inning >= 9:
+        is_final = True
+    elif half == "top" and outs == 3 and inning >= 9 and home_score > away_score:
+        is_final = True
+    elif half == "bottom" and outs == 3 and inning >= 9 and home_score > away_score:
+        is_final = True
+        is_walkoff = True
+    elif half == "bottom" and inning >= 9 and home_score > away_score:
+        # ✅ OVERRIDE: Home team wins before 3rd out — walk-off win
+        is_final = True
+        is_walkoff = True
 
-    home_style = winner_style if winner == "home" else loser_style
-    away_style = winner_style if winner == "away" else loser_style
-    if winner == "tie":
-        home_style = away_style = tie_style
+    # ✅ Final Game Handling with Icons and Inning Label
+    if is_final:
+        final_label = f"F/{inning}" if inning > 9 else "Final"
 
-    # ✅ Final Game Handling
-    if any(term in status for term in ["final", "completed", "game over"]):
+        if home_score > away_score:
+            winner = "home"
+            home_icon, away_icon = "🏆", "❌"
+        elif away_score > home_score:
+            winner = "away"
+            home_icon, away_icon = "❌", "🏆"
+        else:
+            winner = "tie"
+            home_icon = away_icon = "⚔️"
+
+        if is_walkoff:
+            home_icon += " 🚩"
+
+        winner_style = "color: #0af; font-weight: bold;"
+        loser_style = "color: #999;"
+        tie_style = "color: #ccc; font-style: italic;"
+
+        home_style = winner_style if winner == "home" else loser_style
+        away_style = winner_style if winner == "away" else loser_style
+        if winner == "tie":
+            home_style = away_style = tie_style
+
         st.markdown(f"""
         <div style="border: 1px solid #444; border-radius: 8px; padding: 16px; margin: 0.5rem 0 1.5rem 0;">
-            <h4 style="margin-bottom: 0.5rem; text-align: center;">Final</h4>
-            <p style="{away_style}"><strong>{away_team}</strong>: {away_score} R</p>
-            <p style="{home_style}"><strong>{home_team}</strong>: {home_score} R</p>
+            <h4 style="margin-bottom: 0.5rem; text-align: center;">{final_label}</h4>
+            <p style="{away_style}">{away_icon} <strong>{away_team}</strong>: {away_score} R</p>
+            <p style="{home_style}">{home_icon} <strong>{home_team}</strong>: {home_score} R</p>
         </div>
         """, unsafe_allow_html=True)
         return
 
     # ✅ Live Game Handling
-    inning = state.get("inning", "-")
-    half = state.get("half", "-")
-    count = state.get("count", "0-0")
-    outs = state.get("outs", 0)
-    bases = state.get("bases", [])
-
     balls, strikes = map(int, count.split("-"))
     ball_icons = "🟢" * balls + "⚪️" * (3 - balls)
     strike_icons = "🔴" * strikes + "⚪️" * (2 - strikes)
     out_icons = "⚫️" * outs + "⚪️" * (3 - outs)
 
-    # 👇 Render HTML directly
     scoreboard_html = f"""
     <div style="border: 1px solid #444; border-radius: 8px; padding: 16px; margin: 0.5rem 0 1.5rem 0;">
         <h4 style="margin-bottom: 0.5rem; text-align: center;">{half.title()} {inning}</h4>
@@ -73,8 +99,8 @@ def render_scoreboard(game_pk, home_team="Home", away_team="Away", autorefresh=T
                     </div>
                     <p style="margin: 0.25rem 0;"><strong>Outs:</strong> {out_icons}</p>
                     <div style="margin-top: 1rem;">
-                        <p style="margin: 0.25rem 0;"><strong>{away_team}</strong>: {away.get('runs', 0)} R / {away.get('hits', 0)} H / {away.get('xba', '.000')}</p>
-                        <p style="margin: 0.25rem 0;"><strong>{home_team}</strong>: {home.get('runs', 0)} R / {home.get('hits', 0)} H / {home.get('xba', '.000')}</p>
+                        <p style="margin: 0.25rem 0;"><strong>{away_team}</strong>: {away_score} R / {away.get('hits', 0)} H / {away.get('xba', '.000')}</p>
+                        <p style="margin: 0.25rem 0;"><strong>{home_team}</strong>: {home_score} R / {home.get('hits', 0)} H / {home.get('xba', '.000')}</p>
                     </div>
                 </div>
                 <div style='position: relative; width: 80px; height: 80px;'>
@@ -91,35 +117,4 @@ def render_scoreboard(game_pk, home_team="Home", away_team="Away", autorefresh=T
         </div>
     </div>
     """
-    # ✅ Final Game Handling with Icons
-    if any(term in status for term in ["final", "completed", "game over"]):
-        # Determine winner and assign styles + icons
-        if home_score > away_score:
-            winner = "home"
-            home_icon, away_icon = "🏆", "❌"
-        elif away_score > home_score:
-            winner = "away"
-            home_icon, away_icon = "❌", "🏆"
-        else:
-            winner = "tie"
-            home_icon = away_icon = "⚔️"
-
-        winner_style = "color: #0af; font-weight: bold;"
-        loser_style = "color: #999;"
-        tie_style = "color: #ccc; font-style: italic;"
-
-        home_style = winner_style if winner == "home" else loser_style
-        away_style = winner_style if winner == "away" else loser_style
-        if winner == "tie":
-            home_style = away_style = tie_style
-
-        st.markdown(f"""
-        <div style="border: 1px solid #444; border-radius: 8px; padding: 16px; margin: 0.5rem 0 1.5rem 0;">
-            <h4 style="margin-bottom: 0.5rem; text-align: center;">Final</h4>
-            <p style="{away_style}">{away_icon} <strong>{away_team}</strong>: {away_score} R</p>
-            <p style="{home_style}">{home_icon} <strong>{home_team}</strong>: {home_score} R</p>
-        </div>
-        """, unsafe_allow_html=True)
-        return
-
     st.markdown(scoreboard_html, unsafe_allow_html=True)

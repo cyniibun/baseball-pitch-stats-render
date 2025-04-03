@@ -117,15 +117,8 @@ def get_batter_k_rate_by_pitch(batter_name: str, start_date="2024-03-01", end_da
 }
     return mapped_k_rate
 
-def get_batter_metrics_by_pitch(batter_name: str, start_date="2024-03-01", end_date=None) -> pd.DataFrame:
-    try:
-        first, last = batter_name.strip().split(" ", 1)
-    except ValueError:
-        return pd.DataFrame()
-
-    batter_id = get_player_id(first, last)
-    if not batter_id:
-        return pd.DataFrame()
+def get_batter_metrics_by_pitch(batter_id: int, start_date="2024-03-01", end_date=None) -> pd.DataFrame:
+    from pybaseball import statcast_batter
 
     if not end_date:
         end_date = datetime.now().strftime("%Y-%m-%d")
@@ -139,6 +132,45 @@ def get_batter_metrics_by_pitch(batter_name: str, start_date="2024-03-01", end_d
 
     summary = grouped.agg(
         PA=("pitch_type", "count"),
+        BA=("estimated_ba_using_speedangle", "mean"),
+        SLG=("estimated_slg_using_speedangle", "mean"),
+        wOBA=("estimated_woba_using_speedangle", "mean"),
+        K_rate=("events", lambda x: (x == "strikeout").sum() / len(x) * 100),
+        Whiff_rate=("description", lambda x: x.str.contains("swinging_strike").sum() / len(x) * 100),
+        PutAway_rate=("description", lambda x: (x.str.contains("strikeout|swinging_strike")).sum() / len(x) * 100)
+    ).round(2)
+
+    summary = summary.rename(columns={
+        "K_rate": "K%",
+        "Whiff_rate": "Whiff%",
+        "PutAway_rate": "PutAway%"
+    })
+
+    pitch_type_map = {
+        "FF": "4-Seam Fastball", "SL": "Slider", "CH": "Changeup", "CU": "Curveball",
+        "SI": "Sinker", "FC": "Cutter", "FS": "Splitter", "FT": "2-Seam Fastball",
+        "KC": "Knuckle Curve", "ST": "Sweeper", "SV": "Slurve"
+    }
+
+    summary.index = summary.index.map(lambda code: pitch_type_map.get(code, code))
+    summary = summary.reset_index().rename(columns={"index": "pitch_type"})
+
+    return summary
+
+
+def get_pitcher_arsenal_stats(player_id: int, start_date="2024-03-01", end_date=None) -> pd.DataFrame:
+    if not end_date:
+        end_date = datetime.now().strftime("%Y-%m-%d")
+
+    df = statcast_pitcher(start_date, end_date, player_id)
+    if df.empty or "pitch_type" not in df.columns:
+        return pd.DataFrame()
+
+    df = df[df["pitch_type"].notna()]
+    grouped = df.groupby("pitch_type")
+
+    summary = grouped.agg(
+        PA=("batter", "count"),
         BA=("estimated_ba_using_speedangle", "mean"),
         SLG=("estimated_slg_using_speedangle", "mean"),
         wOBA=("estimated_woba_using_speedangle", "mean"),

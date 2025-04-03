@@ -7,8 +7,10 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import streamlit as st
 import pandas as pd
 from urllib.parse import unquote
+from datetime import datetime
 from utils.stat_utils import get_pitcher_stats, get_batter_metrics_by_pitch
 from utils.style_helpers import style_pitcher_table, style_batter_table, style_delta_table
+from utils.mlb_api import get_player_id
 
 st.set_page_config(page_title="Batter vs Pitcher Matchup", layout="wide")
 
@@ -21,30 +23,51 @@ away_team = unquote(query_params.get("away", "Unknown"))
 home_pitcher = unquote(query_params.get("home_pitcher", "Not Announced"))
 away_pitcher = unquote(query_params.get("away_pitcher", "Not Announced"))
 
-# Determine opponent pitcher
+# --- Determine opponent pitcher ---
 pitcher_name = away_pitcher if team_name == home_team else home_pitcher
 
+# --- Title + Season Filter ---
 st.title(f"Matchup: {batter_name} vs. {pitcher_name}")
 st.markdown(f"**Team:** {team_name}")
-st.markdown("---")
 
-# --- Fetch Stats ---
-pitcher_df = get_pitcher_stats(pitcher_name)
-batter_df = get_batter_metrics_by_pitch(batter_name)
+season_choice = st.selectbox(
+    "Select Season Range",
+    options=["All", "2024", "2025"],
+    index=0  # ✅ Default to "All"
+)
 
+if season_choice == "2024":
+    start_date = "2024-03-01"
+    end_date = "2024-12-31"
+elif season_choice == "2025":
+    start_date = "2025-03-01"
+    end_date = "2025-12-31"
+else:
+    start_date = "2024-03-01"
+    end_date = None  # Pull through today
+
+# --- Get Batter ID ---
+try:
+    first, last = batter_name.strip().split(" ", 1)
+    batter_id = get_player_id(first, last)
+except ValueError:
+    batter_id = None
+
+# --- Fetch Stats (Scoped to Season) ---
+pitcher_df = get_pitcher_stats(pitcher_name, start_date=start_date, end_date=end_date)
+batter_df = get_batter_metrics_by_pitch(batter_id, start_date=start_date, end_date=end_date) if batter_id else pd.DataFrame()
+
+# --- Display Content ---
 if pitcher_df.empty or batter_df.empty:
     st.warning("Insufficient data to display matchup.")
 else:
-    # Round values for display
     batter_df = batter_df.round(2)
     pitcher_df = pitcher_df.round(2)
 
-    # Filter to common pitch types
     common_pitches = set(pitcher_df["pitch_type"]) & set(batter_df["pitch_type"])
     pitcher_df = pitcher_df[pitcher_df["pitch_type"].isin(common_pitches)]
     batter_df = batter_df[batter_df["pitch_type"].isin(common_pitches)]
 
-    # Merge for delta calculation
     matchup_df = pd.merge(
         pitcher_df,
         batter_df,
