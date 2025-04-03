@@ -9,6 +9,7 @@ from utils.style_utils import get_red_shade, get_pitcher_red_green_shade, get_pi
 from utils.lineup_utils import get_game_lineups, get_lineup_for_game, get_live_lineup, get_official_lineups
 from utils.stat_utils import get_pitcher_stats, get_batter_k_rate_by_pitch
 from utils.mlb_api import get_probable_pitchers_for_date, get_game_state
+from utils.scoreboard_utils import render_scoreboard
 import streamlit as st
 from urllib.parse import unquote, quote
 from datetime import datetime
@@ -54,65 +55,9 @@ game_pk = lineup_map.get(f"{away} @ {home}", {}).get("gamePk")
 away_lineup_raw, home_lineup_raw = get_live_lineup(game_pk, starters_only=True) if game_pk else ([], [])
 
 # --- Scoreboard Render ---
-def render_scoreboard(game_pk):
-    state = get_game_state(game_pk)
-    if not state:
-        return
-
-    inning = state.get("inning", "-")
-    half = state.get("half", "-")
-    count = state.get("count", "0-0")
-    outs = state.get("outs", 0)
-    bases = state.get("bases", [])
-    linescore = state.get("linescore", {})
-    away_team = linescore.get("away", {})
-    home_team = linescore.get("home", {})
-
-    balls, strikes = map(int, count.split("-"))
-
-    # Emoji indicators
-    ball_icons = "🟢" * balls + "⚪️" * (3 - balls)
-    strike_icons = "🔴" * strikes + "⚪️" * (2 - strikes)
-    out_icons = "⚫️" * outs + "⚪️" * (3 - outs)
-
-    # Base diamonds
-    base_html = f"""
-    <div style='position: relative; width: 80px; height: 80px; margin: auto;'>
-        <div style='position: absolute; top: 0; left: 50%; transform: translate(-50%, -50%) rotate(45deg); 
-                    width: 20px; height: 20px; border: 2px solid #999; {"background-color:#0af;" if "2B" in bases else ""}'></div>
-        <div style='position: absolute; left: 0; top: 50%; transform: translate(-50%, -50%) rotate(45deg); 
-                    width: 20px; height: 20px; border: 2px solid #999; {"background-color:#0af;" if "3B" in bases else ""}'></div>
-        <div style='position: absolute; right: 0; top: 50%; transform: translate(50%, -50%) rotate(45deg); 
-                    width: 20px; height: 20px; border: 2px solid #999; {"background-color:#0af;" if "1B" in bases else ""}'></div>
-        <div style='position: absolute; bottom: 0; left: 50%; transform: translate(-50%, 50%) rotate(45deg); 
-                    width: 20px; height: 20px; border: 2px solid #ccc;'></div>
-    </div>
-    """
-
-    # Full scoreboard card
-    scoreboard_html = f"""
-    <div style="border: 1px solid #444; border-radius: 8px; padding: 16px; margin-bottom: 1.5rem;">
-        <h4 style="margin-bottom: 0.5rem;">{half.title()} {inning}</h4>
-        <div style="margin: 0.25rem 0;">
-    <strong>Count:</strong><br>
-    <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.4;">
-        <div><strong>Balls:</strong> {ball_icons}</div>
-        <div><strong>Strikes:</strong> {strike_icons}</div>
-    </div>
-        <p style="margin: 0.25rem 0;"><strong>Outs:</strong> {out_icons}</p>
-        <div style="margin-top: 1rem;">
-            <p style="margin: 0.25rem 0;"><strong>{away}</strong>: {away_team.get('runs', 0)} R / {away_team.get('hits', 0)} H / {away_team.get('xba', '.000')}</p>
-            <p style="margin: 0.25rem 0;"><strong>{home}</strong>: {home_team.get('runs', 0)} R / {home_team.get('hits', 0)} H / {home_team.get('xba', '.000')}</p>
-        </div>
-        {base_html}
-    </div>
-    """
-
-    st.markdown(scoreboard_html, unsafe_allow_html=True)
-
-
 if game_pk:
-    render_scoreboard(game_pk)
+    render_scoreboard(game_pk, home_team=home, away_team=away)
+
 
 # --- Extract Starters and Subs ---
 away_lineup = away_lineup_raw

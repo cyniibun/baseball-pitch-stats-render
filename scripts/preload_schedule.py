@@ -1,14 +1,15 @@
-#game_view.py
+# -*- coding: utf-8 -*-
 import sys
 import os
 
-# Add the parent directory to the system path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# scripts/preload_schedule.py
-from utils.schedule_utils import preload_upcoming_days
+from utils.schedule_utils import fetch_schedule_by_date
+from datetime import datetime, timedelta
 
-print("⏰ Running preload for today and tomorrow...")
 
-# Preload schedules for today and tomorrow
-preload_upcoming_days(days=2)
+print("⏰ Preloading MLB schedule for today and tomorrow...")
+
+for offset in range(2):  # Today and tomorrow
+    target_date = datetime.utcnow().date() + timedelta(days=offset)
+    fetch_schedule_by_date(datetime.combine(target_date, datetime.min.time()), force_refresh=True)

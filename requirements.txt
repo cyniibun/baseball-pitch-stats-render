@@ -5,3 +5,4 @@ openpyxl
 pybaseball
 pytz
 requests
+streamlit_autorefresh

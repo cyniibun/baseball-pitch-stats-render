@@ -2,6 +2,7 @@ import os
 import json
 import requests
 from datetime import datetime
+import pandas as pd
 
 CACHE_DIR = "cached_schedules"
 
@@ -71,11 +72,17 @@ def get_schedule():
             games = fetch_schedule_by_date(datetime.combine(target_date, datetime.min.time()), force_refresh=True)
 
         # Add game metadata
+        # Add game metadata
         for game in games:
-            game["Date"] = f"{target_date} {game.get('time', '00:00')}"
+            try:
+                game["Date"] = pd.to_datetime(game.get("time"), utc=True)
+            except Exception:
+                game["Date"] = pd.NaT
+
             game["Home"] = game.get("home", "Unknown")
             game["Away"] = game.get("opponent", "Unknown")
             all_games.append(game)
+
 
     if not all_games:
         return pd.DataFrame()
