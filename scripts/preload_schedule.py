@@ -7,6 +7,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from utils.schedule_utils import fetch_schedule_by_date
 from datetime import datetime, timedelta
 
+import warnings
+warnings.filterwarnings("ignore", message=".*missing ScriptRunContext.*")
 
 print("⏰ Preloading MLB schedule for today and tomorrow...")
 

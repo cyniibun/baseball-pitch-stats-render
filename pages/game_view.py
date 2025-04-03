@@ -1,4 +1,3 @@
-#game_view.py
 import sys
 import os
 
@@ -6,9 +5,14 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from utils.style_utils import get_red_shade, get_pitcher_red_green_shade, get_pitcher_blue_red_shade
-from utils.lineup_utils import get_game_lineups, get_lineup_for_game, get_live_lineup, get_official_lineups
-from utils.stat_utils import get_pitcher_stats, get_batter_k_rate_by_pitch
-from utils.mlb_api import get_probable_pitchers_for_date, get_game_state
+from utils.lineup_utils import get_game_lineups, get_live_lineup
+from utils.mlb_api import (
+    get_probable_pitchers_for_date, 
+    get_game_state, 
+    get_pitcher_advanced_metrics_by_name, 
+    get_batter_advanced_metrics_by_name,
+    get_pitcher_arsenal_from_api
+)
 from utils.style_helpers import sanitize_numeric_columns
 from utils.scoreboard_utils import render_scoreboard
 from utils.formatting_utils import format_baseball_stats
@@ -17,7 +21,7 @@ from urllib.parse import unquote, quote
 from datetime import datetime
 import pytz
 import pandas as pd
-#from utils.style_helpers import get_red_shade
+from concurrent.futures import ThreadPoolExecutor
 
 st.set_page_config(page_title="Matchup View", layout="wide")
 
@@ -60,12 +64,9 @@ away_lineup_raw, home_lineup_raw = get_live_lineup(game_pk, starters_only=True) 
 if game_pk:
     render_scoreboard(game_pk, home_team=home, away_team=away)
 
-
 # --- Extract Starters and Subs ---
 away_lineup = away_lineup_raw
 home_lineup = home_lineup_raw
-# Match total player count
-
 
 # --- Fallback Pitcher ---
 def fallback_pitcher_from_lineup(lineup):
@@ -90,13 +91,15 @@ def render_lineup(pitcher_name, lineup, team_name):
     st.markdown("<h4 style='margin-bottom: 0.5rem;'>Pitch Arsenal</h4>", unsafe_allow_html=True)
 
     if pitcher_name and pitcher_name != "Not Announced":
-        arsenal_df = get_pitcher_stats(pitcher_name)
-        if isinstance(arsenal_df, pd.DataFrame) and not arsenal_df.empty:
-            desired_columns = ["pitch_type", "PA", "BA", "SLG", "wOBA", "K%", "Whiff%", "PutAway%"]
-            available_columns = [col for col in desired_columns if col in arsenal_df.columns]
+        # Fetch the pitch arsenal (types, PA, etc.) using the correct function
+        arsenal_df = get_pitcher_arsenal_from_api(pitcher_name)  # Use this function for pitch arsenal data
+        
+        # Debugging to check what data we are getting
+        st.write(f"Pitch Arsenal for {pitcher_name}: {arsenal_df}")
 
+        if isinstance(arsenal_df, pd.DataFrame) and not arsenal_df.empty:
             # ✅ Sanitize numerical columns
-            arsenal_df = sanitize_numeric_columns(arsenal_df, available_columns[1:])  # skip pitch_type
+            arsenal_df = sanitize_numeric_columns(arsenal_df, ["PA", "BA", "SLG", "wOBA", "K%", "Whiff%", "PutAway%"])
 
             # ✅ Pre-format values to 3 decimal places, strip trailing 0s
             stat_cols = ["BA", "SLG", "wOBA", "K%", "Whiff%", "PutAway%"]
@@ -104,7 +107,8 @@ def render_lineup(pitcher_name, lineup, team_name):
                 if col in arsenal_df.columns:
                     arsenal_df[col] = arsenal_df[col].map(lambda x: f"{x:.3f}".rstrip("0").rstrip(".") if pd.notnull(x) else "-")
 
-            display_df = arsenal_df[available_columns].fillna("-")
+            # ✅ Display the arsenal in a nice table
+            display_df = arsenal_df[["pitch_type", "PA", "BA", "SLG", "wOBA", "K%", "Whiff%", "PutAway%"]].fillna("-")
 
             st.dataframe(
                 display_df.style
@@ -113,23 +117,17 @@ def render_lineup(pitcher_name, lineup, team_name):
                 use_container_width=True
             )
 
-            if "pitch_type" in display_df.columns:
-                pitch_types = display_df["pitch_type"].tolist()
+            pitch_types = display_df["pitch_type"].tolist()
         else:
-            st.warning("No pitch data found.")
-
+            st.warning(f"No pitch data found for {pitcher_name}.")
+    
     height = len(arsenal_df) if arsenal_df is not None else 0
     return pitch_types, lineup, team_name, pitcher_name, height
 
 
 
 
-
-from concurrent.futures import ThreadPoolExecutor
-
-all_batters = [player.split(" - ")[0].strip() for player in away_lineup + home_lineup]
-
-# --- Batch Fetch Batter K% Stats ---
+# --- Fetch Batter K% Stats ---
 def fetch_batter_k_rates(batters):
     stats = {}
 
@@ -145,7 +143,8 @@ def fetch_batter_k_rates(batters):
 all_batters = list({player.split(" - ")[0].strip() for player in away_lineup + home_lineup if player.strip()})
 
 # Fetch K% data for all batters in parallel
-k_rate_lookup = fetch_batter_k_rates(all_batters)
+away_k_rate_lookup = fetch_batter_k_rates(home_pitcher)  # Away team batters vs home pitcher
+home_k_rate_lookup = fetch_batter_k_rates(away_pitcher)  # Home team batters vs away pitcher
 
 
 # --- Batting Lineup Renderer ---
@@ -177,7 +176,7 @@ def render_batting_lineup(pitch_types, pitcher_name, lineup, team_name, k_rate_l
             padding: 6px 10px;
             text-align: center;
             white-space: nowrap;
-            color: white;  /* <--- ADDED THIS LINE */
+            color: white;
         }
 
         .lineup-table th {
@@ -278,27 +277,13 @@ def render_batting_lineup(pitch_types, pitcher_name, lineup, team_name, k_rate_l
     st.markdown(table_html, unsafe_allow_html=True)
 
 
-
 # --- Render Columns Side-by-Side ---
 col1, col2 = st.columns(2)
 
 with col1:
     pt_1, lu_1, tn_1, pn_1, h1 = render_lineup(away_pitcher, away_lineup, away)
+    render_batting_lineup(pt_1, pn_1, away_lineup, away, away_k_rate_lookup)
+
 with col2:
     pt_2, lu_2, tn_2, pn_2, h2 = render_lineup(home_pitcher, home_lineup, home)
-
-max_h = max(h1, h2)
-
-with col1:
-    if h1 < max_h:
-        for _ in range(max_h - h1):
-            st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-    render_batting_lineup(pt_1, pn_1, away_lineup, away, k_rate_lookup)
-
-with col2:
-    if h2 < max_h:
-        for _ in range(max_h - h2):
-            st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-    render_batting_lineup(pt_2, pn_2, home_lineup, home, k_rate_lookup)
-
-    
+    render_batting_lineup(pt_2, pn_2, home_lineup, home, home_k_rate_lookup)
