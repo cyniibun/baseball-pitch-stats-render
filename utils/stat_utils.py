@@ -1,9 +1,3 @@
-import sys
-import os
-
-# Add the parent directory to the system path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -13,61 +7,6 @@ from utils.mlb_api import (
     get_player_id,
     get_batter_putaway_by_pitch
 )
-
-CACHE_DIR = './data/daily_stats'  # Use this path for both Render and local setups
-
-def load_cached_data(file_name):
-    """
-    Load cached data from a file if it exists.
-    """
-    file_path = os.path.join(CACHE_DIR, file_name)
-    if os.path.exists(file_path):
-        if file_name.endswith(".csv"):
-            return pd.read_csv(file_path)
-    return None
-
-def save_cached_data(file_name, data):
-    """
-    Save data to a cache file (in CSV format).
-    """
-    file_path = os.path.join(CACHE_DIR, file_name)
-    data.to_csv(file_path, index=False)
-
-def fetch_batter_stats_by_pitch(start_date, end_date, batter_name):
-    """
-    Fetch batter stats either from cache or by making an API call for a date range.
-    """
-    # Get batter ID from player name (you need to supply the batter name)
-    first, last = batter_name.strip().split(" ", 1)
-    batter_id = get_player_id(first, last)
-
-    file_name = f"batters_by_pitch_{start_date}_{end_date}.csv"
-    cached_data = load_cached_data(file_name)
-    if cached_data is not None:
-        return cached_data  # Return cached data
-
-    # If no cache, fetch from the API
-    batter_stats = get_batter_metrics_by_pitch(batter_id=batter_id, start_date=start_date, end_date=end_date)  # Pass batter_id
-    save_cached_data(file_name, batter_stats)
-    return batter_stats
-
-def fetch_pitcher_stats_by_pitch(start_date, end_date, pitcher_name):
-    """
-    Fetch pitcher stats either from cache or by making an API call for a date range.
-    """
-    # Get pitcher ID from player name
-    first, last = pitcher_name.strip().split(" ", 1)
-    pitcher_id = get_player_id(first, last)
-
-    file_name = f"pitchers_by_pitch_{start_date}_{end_date}.csv"
-    cached_data = load_cached_data(file_name)
-    if cached_data is not None:
-        return cached_data  # Return cached data
-
-    # If no cache, fetch from the API
-    pitcher_stats = get_pitcher_arsenal_stats(player_id=pitcher_id, start_date=start_date, end_date=end_date)  # Pass pitcher_id
-    save_cached_data(file_name, pitcher_stats)
-    return pitcher_stats
 
 PITCH_TYPE_MAP = {
     "FF": "4-Seam Fastball", "SL": "Slider", "CH": "Changeup", "CU": "Curveball",

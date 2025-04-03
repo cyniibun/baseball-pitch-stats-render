@@ -112,8 +112,6 @@ def render_scoreboard(game_pk, home_team="Home", away_team="Away", autorefresh=T
 
     # --- Optional Count Section ---
     balls, strikes = map(int, count.split("-"))
-    count_html = ""  # Initialize count_html to an empty string
-
     if not is_scheduled and (inning > 1 or has_real_activity):
         count_html = f"""
         <strong>Count:</strong><br>
@@ -123,7 +121,11 @@ def render_scoreboard(game_pk, home_team="Home", away_team="Away", autorefresh=T
         </div>
         <p style="margin: 0.25rem 0;"><strong>Outs:</strong> {'⚫️' * outs + '⚪️' * (3 - outs)}</p>
     """
+    else:
+        count_html = ""
 
     # --- Final Scoreboard HTML ---
     # --- Final Scoreboard Display ---
     st.markdown(f'<div style="border:1px solid #444;border-radius:8px;padding:16px;margin:0.5rem 0 1.5rem 0;"><h4 style="margin-bottom:0.5rem;text-align:center;">{display_title}</h4><div style="display:flex;justify-content:center;"><div style="display:flex;flex-direction:row;align-items:center;gap:36px;flex-wrap:wrap;max-width:800px;"><div style="min-width:240px;">{count_html}<p style="margin:0.25rem 0;"><strong>{away_team}</strong>: {away_score} R / {away.get("hits", 0)} H / {away.get("xba", ".000")}</p><p style="margin:0.25rem 0;"><strong>{home_team}</strong>: {home_score} R / {home.get("hits", 0)} H / {home.get("xba", ".000")}</p></div></div></div></div>', unsafe_allow_html=True)
+
+

@@ -1,5 +1,5 @@
 streamlit>=1.26
-pandas>=2.2.3
+pandas
 numpy
 openpyxl
 pybaseball

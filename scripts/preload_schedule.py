@@ -2,10 +2,6 @@
 import sys
 import os
 
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning, message=".*missing ScriptRunContext.*")
-
-
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from utils.schedule_utils import fetch_schedule_by_date

@@ -1,11 +1,10 @@
 import streamlit as st
 from utils.schedule_utils import fetch_schedule_by_date
-from datetime import datetime, date
+from datetime import datetime, timedelta, date
 import pytz
 import pandas as pd
 from utils.scoreboard_utils import render_scoreboard
-from utils.lineup_utils import get_game_lineups,get_official_lineups  # Ensure correct function
-import os
+from utils.lineup_utils import get_game_lineups
 
 st.set_page_config(page_title="MLB Schedule", layout="wide")
 st.title("📅 MLB Schedule")
@@ -31,28 +30,8 @@ else:
     schedule_df = pd.DataFrame(games).dropna(subset=["Date"]).sort_values(by="Date")
 
     # Get lineup data once
-    lineup_map = {}
+    lineup_map = get_game_lineups(selected_date.strftime("%Y-%m-%d"))
 
-    for _, game in schedule_df.iterrows():
-        home = game.get("home", "Unknown")
-        away = game.get("opponent", "Unknown")
-        game_pk = game.get("gamePk", None)
-
-        # Fetch official lineups
-        if game_pk:
-            home_lineup, away_lineup, game_pk = get_official_lineups(game_pk)
-
-            # Ensure that lineup_map is updated with home and away lineup and game_pk
-            lineup_map[f"{away} @ {home}"] = {
-                "gamePk": game_pk,
-                "home": home,
-                "away": away,
-                "home_lineup": home_lineup,
-                "away_lineup": away_lineup,
-            }
-
-
-    # --- Display Game Info and Lineups ---
     for _, game in schedule_df.iterrows():
         home = game.get("home", "Unknown")
         away = game.get("opponent", "Unknown")

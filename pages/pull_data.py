@@ -1,6 +1,5 @@
 import sys
 import os
-import subprocess
 
 # Add the parent directory to the system path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -41,20 +40,3 @@ if st.button("Fetch Today's Schedule"):
     schedule_df = fetch_schedule_by_date(today)
     st.success("MLB schedule refreshed.")
     st.dataframe(schedule_df)
-
-# Manual Stats Job Section
-st.header("Run Daily Stats Job")
-if st.button("Run Daily Stats Job"):
-    try:
-        # Use subprocess to run the daily stats job script
-        result = subprocess.run(["python3", "scripts/daily_stats_job.py"], capture_output=True, text=True)
-        
-        # Display success message
-        if result.returncode == 0:
-            st.success("Daily stats job completed successfully!")
-            st.text(result.stdout)  # Optionally display the job's output logs
-        else:
-            st.error("Error occurred while running the daily stats job!")
-            st.text(result.stderr)  # Optionally display error logs
-    except Exception as e:
-        st.error(f"Failed to run the daily stats job: {e}")
