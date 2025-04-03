@@ -90,3 +90,4 @@ def get_schedule():
     df = pd.DataFrame(all_games)
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce", utc=True)
     return df.dropna(subset=["Date"])
+

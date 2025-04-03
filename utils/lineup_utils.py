@@ -1,10 +1,13 @@
-# lineup_utils.py
 import requests
 from datetime import datetime, timedelta
 import pytz
 
 # --- Get games for a specific date ---
 def get_game_lineups(game_date: str):
+    """
+    Fetch lineups for all games on a specific date.
+    If no lineup is available for today, fallback to previous day's lineup.
+    """
     url = f"https://statsapi.mlb.com/api/v1/schedule/games/?sportId=1&date={game_date}"
     resp = requests.get(url)
     if resp.status_code != 200:
@@ -23,7 +26,7 @@ def get_game_lineups(game_date: str):
         }
     return lineup_data
 
-# --- Extract boxscore lineups (partial data for starters) ---
+# --- Get the lineup for a game using game_pk ---
 def get_lineup_for_game(game_pk: int):
     url = f"https://statsapi.mlb.com/api/v1/game/{game_pk}/boxscore"
     resp = requests.get(url)
@@ -47,9 +50,7 @@ def get_lineup_for_game(game_pk: int):
 
     return extract_lineup(away_players), extract_lineup(home_players)
 
-# --- Pull live game lineups (includes real-time battingOrder) ---
-
-
+# --- Get the live lineup (with real-time battingOrder) ---
 def get_live_lineup(game_pk: int, starters_only=True):
     url = f"https://statsapi.mlb.com/api/v1/game/{game_pk}/boxscore"
     resp = requests.get(url)
@@ -74,11 +75,8 @@ def get_live_lineup(game_pk: int, starters_only=True):
 
     return extract_active_lineup(away_players), extract_active_lineup(home_players)
 
-
-
-
-
-# --- Pull official lineups with fallback and EST-based decision logic ---
+# --- Official lineups with fallback for games within window ---
+# --- Official lineups with fallback for games within window ---
 def get_official_lineups(game_pk):
     # Use EST time window to determine reliability
     eastern = pytz.timezone("US/Eastern")
@@ -88,13 +86,13 @@ def get_official_lineups(game_pk):
     preview_url = f"https://statsapi.mlb.com/api/v1.1/game/{game_pk}/feed/live"
     resp = requests.get(preview_url)
     if not resp.ok:
-        return get_lineup_for_game(game_pk)
+        return get_lineup_for_game(game_pk)  # Return fallback lineups if preview fails
 
     data = resp.json()
     status = data.get("gameData", {}).get("status", {})
     game_time_str = data.get("gameData", {}).get("datetime", {}).get("dateTime")
     if not game_time_str:
-        return get_lineup_for_game(game_pk)
+        return get_lineup_for_game(game_pk)  # Return fallback lineups if no game time
 
     # Parse official scheduled time (EST)
     game_dt_utc = datetime.fromisoformat(game_time_str.replace("Z", "+00:00"))
@@ -107,7 +105,17 @@ def get_official_lineups(game_pk):
     if is_live or is_within_window:
         away, home = get_live_lineup(game_pk)
         if away and home:
-            return away, home
+            return away, home, game_pk  # Return live lineups with game_pk
 
-    # Fallback
-    return get_lineup_for_game(game_pk)
+    # Fallback to previous lineups if live or official not available
+    return get_lineup_for_game(game_pk) + (game_pk,)  # Return fallback lineups and game_pk
+
+
+# --- Fallback to previous day's lineup ---
+def get_previous_day_lineup(game_date: str):
+    """
+    This function returns the previous day's lineup by calling the same method
+    but with a date from the previous day.
+    """
+    previous_day = (datetime.strptime(game_date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+    return get_game_lineups(previous_day)

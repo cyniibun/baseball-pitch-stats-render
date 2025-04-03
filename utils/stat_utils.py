@@ -14,7 +14,7 @@ from utils.mlb_api import (
     get_batter_putaway_by_pitch
 )
 
-CACHE_DIR = '/data/daily_stats'  # Use this path for both Render and local setups
+CACHE_DIR = './data/daily_stats'  # Use this path for both Render and local setups
 
 def load_cached_data(file_name):
     """
@@ -33,31 +33,39 @@ def save_cached_data(file_name, data):
     file_path = os.path.join(CACHE_DIR, file_name)
     data.to_csv(file_path, index=False)
 
-def fetch_batter_stats_by_pitch(start_date, end_date):
+def fetch_batter_stats_by_pitch(start_date, end_date, batter_name):
     """
     Fetch batter stats either from cache or by making an API call for a date range.
     """
+    # Get batter ID from player name (you need to supply the batter name)
+    first, last = batter_name.strip().split(" ", 1)
+    batter_id = get_player_id(first, last)
+
     file_name = f"batters_by_pitch_{start_date}_{end_date}.csv"
     cached_data = load_cached_data(file_name)
     if cached_data is not None:
         return cached_data  # Return cached data
 
     # If no cache, fetch from the API
-    batter_stats = get_batter_metrics_by_pitch(start_date=start_date, end_date=end_date)  # Corrected parameter names
+    batter_stats = get_batter_metrics_by_pitch(batter_id=batter_id, start_date=start_date, end_date=end_date)  # Pass batter_id
     save_cached_data(file_name, batter_stats)
     return batter_stats
 
-def fetch_pitcher_stats_by_pitch(start_date, end_date):
+def fetch_pitcher_stats_by_pitch(start_date, end_date, pitcher_name):
     """
     Fetch pitcher stats either from cache or by making an API call for a date range.
     """
+    # Get pitcher ID from player name
+    first, last = pitcher_name.strip().split(" ", 1)
+    pitcher_id = get_player_id(first, last)
+
     file_name = f"pitchers_by_pitch_{start_date}_{end_date}.csv"
     cached_data = load_cached_data(file_name)
     if cached_data is not None:
         return cached_data  # Return cached data
 
     # If no cache, fetch from the API
-    pitcher_stats = get_pitcher_arsenal_stats(start_date=start_date, end_date=end_date)  # Corrected parameter names
+    pitcher_stats = get_pitcher_arsenal_stats(player_id=pitcher_id, start_date=start_date, end_date=end_date)  # Pass pitcher_id
     save_cached_data(file_name, pitcher_stats)
     return pitcher_stats
 

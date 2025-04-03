@@ -2,6 +2,7 @@ from datetime import datetime
 import requests
 import pytz
 import pandas as pd
+from pybaseball import statcast_batter
 
 # --- Fetch today's MLB schedule ---
 def fetch_today_schedule():
@@ -86,6 +87,39 @@ def calculate_advanced_metrics(stats):
             "K%": "N/A",
             "PutAway%": "N/A"
         }
+
+# In utils/mlb_api.py
+
+from pybaseball import statcast_batter
+
+def get_batter_metrics_by_pitch(batter_id, start_date, end_date):
+    """
+    Fetch batter stats by pitch type from Statcast for a given batter.
+    """
+    df = statcast_batter(start_date, end_date, batter_id)
+    if df.empty:
+        return pd.DataFrame()
+
+    # Extract only the relevant columns and return
+    df = df[df["pitch_type"].notna()]
+    grouped = df.groupby("pitch_type")
+
+    summary = grouped.agg(
+        PA=("pitch_type", "count"),
+        BA=("estimated_ba_using_speedangle", "mean"),
+        SLG=("estimated_slg_using_speedangle", "mean"),
+        wOBA=("estimated_woba_using_speedangle", "mean"),
+        K_rate=("events", lambda x: (x == "strikeout").sum() / len(x) * 100),
+        Whiff_rate=("description", lambda x: x.str.contains("swinging_strike").sum() / len(x) * 100),
+        PutAway_rate=("description", lambda x: (x.str.contains("strikeout|swinging_strike")).sum() / len(x) * 100)
+    )
+
+    summary = summary.rename(columns={
+        "K_rate": "K%", "Whiff_rate": "Whiff%", "PutAway_rate": "PutAway%"
+    })
+
+    return summary.reset_index().rename(columns={"index": "pitch_type"})
+
 
 # --- Combine name + advanced metric lookup ---
 def get_pitcher_advanced_metrics_by_name(full_name, season=None):
