@@ -1,3 +1,4 @@
 # Daily stats CSVs
 data/daily_stats/
 !data/daily_stats/.keep  # Optional placeholder file to retain the folder
+pages/debug_lineup

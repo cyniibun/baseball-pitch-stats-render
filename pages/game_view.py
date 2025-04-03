@@ -11,6 +11,7 @@ from utils.stat_utils import get_pitcher_stats, get_batter_k_rate_by_pitch
 from utils.mlb_api import get_probable_pitchers_for_date, get_game_state
 from utils.style_helpers import sanitize_numeric_columns
 from utils.scoreboard_utils import render_scoreboard
+from utils.formatting_utils import format_baseball_stats
 import streamlit as st
 from urllib.parse import unquote, quote
 from datetime import datetime
@@ -78,6 +79,7 @@ if not home_pitcher or home_pitcher == "Not Announced":
 st.write("gamePk:", game_pk)
 
 # --- Lineup Renderer ---
+# --- Lineup Renderer ---
 def render_lineup(pitcher_name, lineup, team_name):
     pitch_types = []
     arsenal_df = None
@@ -93,15 +95,22 @@ def render_lineup(pitcher_name, lineup, team_name):
             desired_columns = ["pitch_type", "PA", "BA", "SLG", "wOBA", "K%", "Whiff%", "PutAway%"]
             available_columns = [col for col in desired_columns if col in arsenal_df.columns]
 
-            # ✅ Sanitize numeric columns
-            arsenal_df = sanitize_numeric_columns(arsenal_df, ["BA", "SLG", "wOBA", "K%", "Whiff%", "PutAway%"])
+            # ✅ Sanitize numerical columns
+            arsenal_df = sanitize_numeric_columns(arsenal_df, available_columns[1:])  # skip pitch_type
+
+            # ✅ Pre-format values to 3 decimal places, strip trailing 0s
+            stat_cols = ["BA", "SLG", "wOBA", "K%", "Whiff%", "PutAway%"]
+            for col in stat_cols:
+                if col in arsenal_df.columns:
+                    arsenal_df[col] = arsenal_df[col].map(lambda x: f"{x:.3f}".rstrip("0").rstrip(".") if pd.notnull(x) else "-")
 
             display_df = arsenal_df[available_columns].fillna("-")
+
             st.dataframe(
                 display_df.style
                     .map(get_pitcher_blue_red_shade, subset=["BA", "SLG", "wOBA"])
                     .map(lambda v: get_pitcher_red_green_shade(v, high_is_good=True), subset=["K%", "Whiff%", "PutAway%"]),
-            use_container_width=True
+                use_container_width=True
             )
 
             if "pitch_type" in display_df.columns:
@@ -111,6 +120,9 @@ def render_lineup(pitcher_name, lineup, team_name):
 
     height = len(arsenal_df) if arsenal_df is not None else 0
     return pitch_types, lineup, team_name, pitcher_name, height
+
+
+
 
 
 from concurrent.futures import ThreadPoolExecutor

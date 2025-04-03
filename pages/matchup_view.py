@@ -1,10 +1,7 @@
+# matchup_view.py
 
 import sys
 import os
-
-# Add the parent directory to the system path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 import streamlit as st
 import pandas as pd
 from urllib.parse import unquote
@@ -12,6 +9,10 @@ from datetime import datetime
 from utils.stat_utils import get_pitcher_stats, get_batter_metrics_by_pitch
 from utils.style_helpers import style_pitcher_table, style_batter_table, style_delta_table, sanitize_numeric_columns
 from utils.mlb_api import get_player_id
+from utils.formatting_utils import format_baseball_stats
+
+# Add the parent directory to the system path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 st.set_page_config(page_title="Batter vs Pitcher Matchup", layout="wide")
 
@@ -87,11 +88,13 @@ else:
     # --- Display Pitcher Table ---
     st.markdown("### Pitcher Arsenal")
     pitcher_cols = ["pitch_type", "PA", "BA", "SLG", "wOBA", "K%", "Whiff%", "PutAway%"]
+    pitcher_df = format_baseball_stats(pitcher_df)  # Apply formatting to pitcher stats
     st.dataframe(style_pitcher_table(pitcher_df[pitcher_cols]), use_container_width=True)
 
     # --- Display Batter Table ---
     st.markdown("### Batter Metrics by Pitch Type")
     batter_cols = ["pitch_type", "BA", "SLG", "wOBA", "K%", "Whiff%", "PutAway%"]
+    batter_df = format_baseball_stats(batter_df)  # Apply formatting to batter stats
     st.dataframe(style_batter_table(batter_df[batter_cols]), use_container_width=True)
 
     # --- Delta Table ---
@@ -105,4 +108,5 @@ else:
         "wOBA_P", "wOBA_B", "Δ wOBA",
         "BA_P", "BA_B", "Δ BA"
     ]
+    matchup_df = format_baseball_stats(matchup_df)  # Apply formatting to delta values
     st.dataframe(style_delta_table(matchup_df[delta_cols]), use_container_width=True)

@@ -8,8 +8,13 @@ from utils.mlb_api import (
     get_batter_putaway_by_pitch
 )
 
-# --- Pulls pitcher stats (arsenal breakdown) using Statcast via pybaseball ---
-@st.cache_data(ttl=600)  # Caches result for 10 minutes
+PITCH_TYPE_MAP = {
+    "FF": "4-Seam Fastball", "SL": "Slider", "CH": "Changeup", "CU": "Curveball",
+    "SI": "Sinker", "FC": "Cutter", "FS": "Splitter", "FT": "2-Seam Fastball",
+    "KC": "Knuckle Curve", "ST": "Sweeper", "SV": "Slurve"
+}
+
+@st.cache_data(ttl=600)
 def get_pitcher_stats(name: str, start_date="2024-03-01", end_date=None) -> pd.DataFrame:
     try:
         first, last = name.strip().split(" ", 1)
@@ -41,38 +46,13 @@ def get_pitcher_stats(name: str, start_date="2024-03-01", end_date=None) -> pd.D
     )
 
     summary = summary.rename(columns={
-        "K_rate": "K%",
-        "Whiff_rate": "Whiff%",
-        "PutAway_rate": "PutAway%"
-    }).round(2)
+        "K_rate": "K%", "Whiff_rate": "Whiff%", "PutAway_rate": "PutAway%"
+    })
 
-    pitch_type_map = {
-        "FF": "4-Seam Fastball",
-        "SL": "Slider",
-        "CH": "Changeup",
-        "CU": "Curveball",
-        "SI": "Sinker",
-        "FC": "Cutter",
-        "FS": "Splitter",
-        "FT": "2-Seam Fastball",
-        "KC": "Knuckle Curve",
-        "ST": "Sweeper",
-        "SV": "Slurve"
-    }
-
-    summary.index = summary.index.map(lambda code: pitch_type_map.get(code, code))
+    summary.index = summary.index.map(lambda code: PITCH_TYPE_MAP.get(code, code))
     summary = summary.reset_index().rename(columns={"index": "pitch_type"})
+    return summary[summary["PA"] > 0]
 
-    # ✅ Only keep pitches that were actually thrown (PA > 0)
-    summary = summary[summary["PA"] > 0]
-
-    # ⚠️ Optional: log if only a few pitches are shown
-    if len(summary) < 3:
-        print(f"[INFO] Only {len(summary)} pitch types found for {name}. Might be a reliever or early season.")
-
-    return summary
-
-# --- Batter K% per pitch type ---
 @st.cache_data(ttl=600)
 def get_batter_k_rate_by_pitch(batter_name: str, start_date="2024-03-01", end_date=None) -> dict:
     try:
@@ -96,30 +76,12 @@ def get_batter_k_rate_by_pitch(batter_name: str, start_date="2024-03-01", end_da
 
     k_rate = grouped.apply(lambda x: (x["events"] == "strikeout").sum() / len(x) * 100).round(2)
 
-    pitch_type_map = {
-        "FF": "4-Seam Fastball",
-        "SL": "Slider",
-        "CH": "Changeup",
-        "CU": "Curveball",
-        "SI": "Sinker",
-        "FC": "Cutter",
-        "FS": "Splitter",
-        "FT": "2-Seam Fastball",
-        "KC": "Knuckle Curve",
-        "ST": "Sweeper",
-        "SV": "Slurve"
+    return {
+        PITCH_TYPE_MAP.get(pitch, pitch): f"{k_rate.get(pitch, 0.0):.2f}%"
+        for pitch in df["pitch_type"].unique()
     }
 
-    # Map codes to full names for consistency with pitcher stats
-    mapped_k_rate = {
-    pitch_type_map.get(pitch, pitch): f"{k_rate.get(pitch, 0.0):.2f}%"
-    for pitch in df["pitch_type"].unique()
-}
-    return mapped_k_rate
-
 def get_batter_metrics_by_pitch(batter_id: int, start_date="2024-03-01", end_date=None) -> pd.DataFrame:
-    from pybaseball import statcast_batter
-
     if not end_date:
         end_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -138,25 +100,14 @@ def get_batter_metrics_by_pitch(batter_id: int, start_date="2024-03-01", end_dat
         K_rate=("events", lambda x: (x == "strikeout").sum() / len(x) * 100),
         Whiff_rate=("description", lambda x: x.str.contains("swinging_strike").sum() / len(x) * 100),
         PutAway_rate=("description", lambda x: (x.str.contains("strikeout|swinging_strike")).sum() / len(x) * 100)
-    ).round(2)
+    )
 
     summary = summary.rename(columns={
-        "K_rate": "K%",
-        "Whiff_rate": "Whiff%",
-        "PutAway_rate": "PutAway%"
+        "K_rate": "K%", "Whiff_rate": "Whiff%", "PutAway_rate": "PutAway%"
     })
 
-    pitch_type_map = {
-        "FF": "4-Seam Fastball", "SL": "Slider", "CH": "Changeup", "CU": "Curveball",
-        "SI": "Sinker", "FC": "Cutter", "FS": "Splitter", "FT": "2-Seam Fastball",
-        "KC": "Knuckle Curve", "ST": "Sweeper", "SV": "Slurve"
-    }
-
-    summary.index = summary.index.map(lambda code: pitch_type_map.get(code, code))
-    summary = summary.reset_index().rename(columns={"index": "pitch_type"})
-
-    return summary
-
+    summary.index = summary.index.map(lambda code: PITCH_TYPE_MAP.get(code, code))
+    return summary.reset_index().rename(columns={"index": "pitch_type"})
 
 def get_pitcher_arsenal_stats(player_id: int, start_date="2024-03-01", end_date=None) -> pd.DataFrame:
     if not end_date:
@@ -177,29 +128,11 @@ def get_pitcher_arsenal_stats(player_id: int, start_date="2024-03-01", end_date=
         K_rate=("events", lambda x: (x == "strikeout").sum() / len(x) * 100),
         Whiff_rate=("description", lambda x: x.str.contains("swinging_strike").sum() / len(x) * 100),
         PutAway_rate=("description", lambda x: (x.str.contains("strikeout|swinging_strike")).sum() / len(x) * 100)
-    ).round(2)
+    )
 
     summary = summary.rename(columns={
-        "K_rate": "K%",
-        "Whiff_rate": "Whiff%",
-        "PutAway_rate": "PutAway%"
+        "K_rate": "K%", "Whiff_rate": "Whiff%", "PutAway_rate": "PutAway%"
     })
 
-    pitch_type_map = {
-        "FF": "4-Seam Fastball",
-        "SL": "Slider",
-        "CH": "Changeup",
-        "CU": "Curveball",
-        "SI": "Sinker",
-        "FC": "Cutter",
-        "FS": "Splitter",
-        "FT": "2-Seam Fastball",
-        "KC": "Knuckle Curve",
-        "ST": "Sweeper",
-        "SV": "Slurve"
-    }
-
-    summary.index = summary.index.map(lambda code: pitch_type_map.get(code, code))
-    summary = summary.reset_index().rename(columns={"index": "pitch_type"})
-
-    return summary
+    summary.index = summary.index.map(lambda code: PITCH_TYPE_MAP.get(code, code))
+    return summary.reset_index().rename(columns={"index": "pitch_type"})
