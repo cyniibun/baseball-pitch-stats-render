@@ -5,6 +5,8 @@ import pytz
 import pandas as pd
 from utils.scoreboard_utils import render_scoreboard
 from utils.lineup_utils import get_game_lineups
+from utils.stat_utils import fetch_batter_stats_by_pitch, fetch_pitcher_stats_by_pitch
+import os
 
 st.set_page_config(page_title="MLB Schedule", layout="wide")
 st.title("📅 MLB Schedule")
@@ -31,6 +33,10 @@ else:
 
     # Get lineup data once
     lineup_map = get_game_lineups(selected_date.strftime("%Y-%m-%d"))
+
+    # --- Load Batters and Pitchers Stats ---
+    batter_data = fetch_batter_stats_by_pitch(selected_date.strftime("%Y-%m-%d"))
+    pitcher_data = fetch_pitcher_stats_by_pitch(selected_date.strftime("%Y-%m-%d"))
 
     for _, game in schedule_df.iterrows():
         home = game.get("home", "Unknown")
@@ -64,3 +70,13 @@ else:
                 render_scoreboard(game_pk, home_team=home, away_team=away, autorefresh=False)
 
             st.markdown("---")
+
+    # --- Display Batting and Pitching Stats ---
+    st.header("Daily Stats (for selected date)")
+
+    st.subheader("Top Batting Stats")
+    st.dataframe(batter_data)
+
+    st.subheader("Top Pitching Stats")
+    st.dataframe(pitcher_data)
+
