@@ -1,49 +1,43 @@
 import streamlit as st
-from datetime import datetime, date, timedelta
+from utils.schedule_utils import get_schedule
+from datetime import datetime
 import pytz
-from utils.schedule_utils import fetch_schedule_by_date
-import pandas as pd
-schedule_df = pd.read_csv("data/schedule_cache.csv", parse_dates=["Date"])
 
+st.set_page_config(page_title="MLB Schedule", layout="wide")
+st.title("📅 MLB Schedule")
 
-st.set_page_config(page_title="MLB Schedule by Date", layout="wide")
-st.title("📅 MLB Schedule by Date")
+# Load today's + tomorrow's schedule
+schedule_df = get_schedule()
 
-# --- Date Selector Mode ---
-mode = st.selectbox("Choose a date option", ["Today", "Tomorrow", "Pick a date..."])
-
-# --- Determine selected date ---
-if mode == "Today":
-    selected_date = date.today()
-elif mode == "Tomorrow":
-    selected_date = date.today() + timedelta(days=1)
+if schedule_df.empty:
+    st.warning("No games found for today or tomorrow.")
 else:
-    selected_date = st.date_input("Select Date", date.today())
+    eastern = pytz.timezone("US/Eastern")
+    schedule_df = schedule_df.sort_values(by="Date")
 
-# --- Fetch games for selected date ---
-games = fetch_schedule_by_date(datetime.combine(selected_date, datetime.min.time()))
-
-# --- Display games ---
-if not games:
-    st.warning("No games found for this date.")
-else:
-    for game in games:
-        home = game.get("home", "Unknown")
-        away = game.get("away", "Unknown")
-        time_str = game.get("gameTime", "")
+    for _, game in schedule_df.iterrows():
+        home = game.get("home") or game.get("Home", "Unknown")
+        away = game.get("opponent") or game.get("Away", "Unknown")
+        game_time = game["Date"]
 
         try:
-            utc_dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
-            eastern = pytz.timezone("US/Eastern")
-            est_dt = utc_dt.astimezone(eastern)
-            formatted_time = est_dt.strftime("%B %d, %Y at %I:%M %p EST")
+            if pd.isna(game_time):
+                formatted_time = "TBD"
+                iso_time = ""
+            else:
+                if game_time.tzinfo is None:
+                    game_time = pytz.utc.localize(game_time)
+                game_time = game_time.astimezone(eastern)
+                formatted_time = game_time.strftime("%B %d, %Y at %I:%M %p EST")
+                iso_time = game_time.isoformat()
         except:
-            formatted_time = time_str
+            formatted_time = "TBD"
+            iso_time = ""
 
         game_link = (
             f"/game_view?home={home.replace(' ', '%20')}"
             f"&away={away.replace(' ', '%20')}"
-            f"&time={time_str}"
+            f"&time={iso_time}"
         )
 
         with st.container():
