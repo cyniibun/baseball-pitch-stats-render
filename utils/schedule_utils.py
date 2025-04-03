@@ -1,8 +1,7 @@
 import os
 import json
-import pandas as pd
-from datetime import datetime, timedelta
-from pybaseball import schedule_and_record
+import requests
+from datetime import datetime
 
 CACHE_DIR = "cached_schedules"
 
@@ -17,47 +16,61 @@ def fetch_schedule_by_date(date, force_refresh=False):
         except Exception as e:
             print(f"[WARN] Failed to load cache for {date_str}: {e}")
 
-    # Fallback to fresh fetch
-    print(f"[FETCH] Fetching fresh data for {date_str}")
-    games = []
-    all_teams = [
-        'ARI', 'ATL', 'BAL', 'BOS', 'CHC', 'CWS', 'CIN', 'CLE', 'COL', 'DET',
-        'HOU', 'KC', 'LAA', 'LAD', 'MIA', 'MIL', 'MIN', 'NYM', 'NYY', 'OAK',
-        'PHI', 'PIT', 'SD', 'SEA', 'SF', 'STL', 'TB', 'TEX', 'TOR', 'WSH'
-    ]
+    print(f"[FETCHING] Using MLB API for {date_str}")
+    url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date_str}"
+    try:
+        response = requests.get(url)
+        data = response.json()
 
-    for team in all_teams:
-        try:
-            schedule = schedule_and_record(date.year, team)
-            day_schedule = schedule[schedule["Date"].dt.date == date.date()]
-            for _, row in day_schedule.iterrows():
+        games = []
+        for date_data in data.get("dates", []):
+            for game in date_data.get("games", []):
                 games.append({
-                    "team": team,
-                    "opponent": row["Opp"],
-                    "home": row["Home"],
-                    "time": row["Time"],
-                    "result": row["Result"]
+                    "gamePk": game.get("gamePk"),
+                    "home": game["teams"]["home"]["team"]["name"],
+                    "opponent": game["teams"]["away"]["team"]["name"],
+                    "time": game.get("gameDate", ""),
+                    "status": game.get("status", {}).get("detailedState", "")
                 })
-        except Exception as e:
-            print(f"[ERROR] Could not fetch for {team} on {date_str}: {e}")
-            break  # Break on first failure to prevent infinite loop
 
-    # Save to cache
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    with open(cache_file, "w") as f:
-        json.dump(games, f)
+        # Cache result
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(cache_file, "w") as f:
+            json.dump(games, f)
 
-    return games
+        print(f"[CACHED] {len(games)} games saved for {date_str}")
+        return games
+
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch from MLB API for {date_str}: {e}")
+        return []
+
 
 
 def get_schedule():
-    """Returns a DataFrame of games for today and tomorrow, using cache or fallback."""
     all_games = []
+    from datetime import datetime, timedelta
+    import os
 
     for offset in [0, 1]:  # Today and Tomorrow
         target_date = (datetime.utcnow() + timedelta(days=offset)).date()
-        games = fetch_schedule_by_date(datetime.combine(target_date, datetime.min.time()))
+        cache_file = os.path.join(CACHE_DIR, f"{target_date}.json")
+        games = []
 
+        # Try to load from cache
+        if os.path.exists(cache_file):
+            try:
+                with open(cache_file, "r") as f:
+                    games = json.load(f)
+            except Exception as e:
+                print(f"[WARN] Failed to load cache: {e}")
+
+        # Fallback to live fetch if cache is missing or empty
+        if not games:
+            print(f"[FALLBACK] Fetching schedule for {target_date}")
+            games = fetch_schedule_by_date(datetime.combine(target_date, datetime.min.time()), force_refresh=True)
+
+        # Add game metadata
         for game in games:
             game["Date"] = f"{target_date} {game.get('time', '00:00')}"
             game["Home"] = game.get("home", "Unknown")
@@ -70,7 +83,3 @@ def get_schedule():
     df = pd.DataFrame(all_games)
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce", utc=True)
     return df.dropna(subset=["Date"])
-
-# Attempt to test fetching today's schedule to confirm no infinite loop
-test_df = get_schedule()
-test_df.head()

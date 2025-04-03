@@ -4,3 +4,4 @@ numpy
 openpyxl
 pybaseball
 pytz
+requests
