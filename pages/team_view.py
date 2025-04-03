@@ -1,3 +1,9 @@
+import sys
+import os
+
+# Add the parent directory to the system path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import streamlit as st
 from utils.schedule_utils import get_today_schedule
 

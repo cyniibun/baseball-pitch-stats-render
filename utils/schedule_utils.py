@@ -1,14 +1,12 @@
-# file: utils/schedule_utils.py
+# utils/schedule_utils.py
 
 from pybaseball import schedule_and_record
 from datetime import datetime
-import pandas as pd
 import pytz
-import time
 
-def get_today_schedule():
+def fetch_schedule_by_date(target_date: datetime):
     eastern = pytz.timezone("US/Eastern")
-    today = datetime.now(eastern).date()
+    target_date = eastern.localize(target_date)
 
     all_teams = [
         'ARI', 'ATL', 'BAL', 'BOS', 'CHC', 'CWS', 'CIN', 'CLE', 'COL', 'DET',
@@ -16,35 +14,24 @@ def get_today_schedule():
         'PHI', 'PIT', 'SD', 'SEA', 'SF', 'STL', 'TB', 'TEX', 'TOR', 'WSH'
     ]
 
-    games_today = []
-    start_time = time.time()
+    games = []
+    seen = set()
 
     for team in all_teams:
         try:
-            print(f"[DEBUG] Fetching schedule for: {team}")
-            schedule = schedule_and_record(datetime.now().year, team)
-            todays_games = schedule[schedule['Date'].dt.date == today]
-
-            for _, row in todays_games.iterrows():
-                games_today.append({
-                    'team': team,
-                    'opponent': row['Opp'],
-                    'home': row['Home'],
-                    'time': row['Time'],
-                    'result': row['Result'],
-                })
+            schedule = schedule_and_record(target_date.year, team)
+            day_games = schedule[schedule['Date'].dt.date == target_date.date()]
+            for _, row in day_games.iterrows():
+                matchup_key = tuple(sorted([team, row['Opp']]))
+                if matchup_key not in seen:
+                    seen.add(matchup_key)
+                    games.append({
+                        "home": team if row["Home"] else row["Opp"],
+                        "away": row["Opp"] if row["Home"] else team,
+                        "gameTime": row["Date"].isoformat()
+                    })
         except Exception as e:
-            print(f"[ERROR] Failed for {team}: {e}")
+            print(f"[ERROR] Failed fetching for {team}: {e}")
             continue
 
-    seen = set()
-    unique_games = []
-    for game in games_today:
-        matchup_key = tuple(sorted([game['team'], game['opponent']]))
-        if matchup_key not in seen:
-            seen.add(matchup_key)
-            unique_games.append(game)
-
-    print(f"[DEBUG] Total unique games: {len(unique_games)}")
-    print(f"[DEBUG] Finished in {time.time() - start_time:.2f} seconds")
-    return unique_games
+    return games

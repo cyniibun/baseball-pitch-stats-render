@@ -1,16 +1,31 @@
 import streamlit as st
-from utils.mlb_api import fetch_today_schedule  # Assume this fetches current MLB games
-from datetime import datetime
+from datetime import datetime, date, timedelta
 import pytz
+from utils.schedule_utils import fetch_schedule_by_date
+import pandas as pd
+schedule_df = pd.read_csv("data/schedule_cache.csv", parse_dates=["Date"])
 
-st.set_page_config(page_title="Today's MLB Games", layout="wide")
-st.title("🌗 Today's MLB Games")
 
-# Fetch today's games from MLB API or fallback method
-games = fetch_today_schedule()
+st.set_page_config(page_title="MLB Schedule by Date", layout="wide")
+st.title("📅 MLB Schedule by Date")
 
+# --- Date Selector Mode ---
+mode = st.selectbox("Choose a date option", ["Today", "Tomorrow", "Pick a date..."])
+
+# --- Determine selected date ---
+if mode == "Today":
+    selected_date = date.today()
+elif mode == "Tomorrow":
+    selected_date = date.today() + timedelta(days=1)
+else:
+    selected_date = st.date_input("Select Date", date.today())
+
+# --- Fetch games for selected date ---
+games = fetch_schedule_by_date(datetime.combine(selected_date, datetime.min.time()))
+
+# --- Display games ---
 if not games:
-    st.warning("No games found for today.")
+    st.warning("No games found for this date.")
 else:
     for game in games:
         home = game.get("home", "Unknown")
@@ -25,7 +40,11 @@ else:
         except:
             formatted_time = time_str
 
-        game_link = f"/game_view?home={home.replace(' ', '%20')}&away={away.replace(' ', '%20')}&time={time_str}"
+        game_link = (
+            f"/game_view?home={home.replace(' ', '%20')}"
+            f"&away={away.replace(' ', '%20')}"
+            f"&time={time_str}"
+        )
 
         with st.container():
             st.markdown(f"### [{away} @ {home}]({game_link})")

@@ -1,9 +1,20 @@
+#game_view.py
+import sys
+import os
+
+# Add the parent directory to the system path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from utils.style_utils import get_red_shade, get_pitcher_red_green_shade, get_pitcher_blue_red_shade
+from utils.lineup_utils import get_game_lineups, get_lineup_for_game, get_live_lineup, get_official_lineups
+from utils.stat_utils import get_pitcher_stats, get_batter_k_rate_by_pitch
+from utils.mlb_api import get_probable_pitchers_for_date, get_game_state
 import streamlit as st
-from urllib.parse import unquote
-from utils.lineup_utils import get_game_lineups, get_lineup_for_game
-from utils.stat_utils import get_pitcher_stats, get_advanced_pitching_metrics
+from urllib.parse import unquote, quote
 from datetime import datetime
 import pytz
+import pandas as pd
+#from utils.style_helpers import get_red_shade
 
 st.set_page_config(page_title="Matchup View", layout="wide")
 
@@ -13,7 +24,7 @@ home = unquote(query_params.get("home", "Unknown"))
 away = unquote(query_params.get("away", "Unknown"))
 game_time_utc = query_params.get("time", "Unknown")
 
-# --- Convert to EST for display ---
+# --- Convert to EST ---
 try:
     utc_dt = datetime.fromisoformat(game_time_utc.replace("Z", "+00:00"))
     eastern = pytz.timezone("US/Eastern")
@@ -25,74 +36,306 @@ except Exception:
     date_only = game_time_utc.split("T")[0] if "T" in game_time_utc else "Unknown"
 
 # --- Header ---
-st.title(f"🏟️ {away} @ {home}")
-st.markdown(f"🕒 **Game Time:** {formatted_time}")
+st.title(f"\U0001F3DF️ {away} @ {home}")
+st.markdown(f"\U0001F552 **Game Time:** {formatted_time}")
 st.markdown("---")
 
-# --- Get Lineups ---
+# --- Get Probable Pitchers ---
+probables_map = get_probable_pitchers_for_date(date_only)
+probables = probables_map.get(f"{away} @ {home}", {})
+away_pitcher = probables.get("away_pitcher")
+home_pitcher = probables.get("home_pitcher")
+
+# --- Get GamePK & Lineups ---
 lineup_map = get_game_lineups(date_only)
 game_pk = lineup_map.get(f"{away} @ {home}", {}).get("gamePk")
-away_lineup, home_lineup = get_lineup_for_game(game_pk) if game_pk else ([], [])
 
-# --- National League Check ---
-NATIONAL_LEAGUE_TEAMS = [
-    "Atlanta Braves", "Miami Marlins", "New York Mets", "Philadelphia Phillies", "Washington Nationals",
-    "Chicago Cubs", "Cincinnati Reds", "Milwaukee Brewers", "Pittsburgh Pirates", "St. Louis Cardinals",
-    "Arizona Diamondbacks", "Colorado Rockies", "Los Angeles Dodgers", "San Diego Padres", "San Francisco Giants"
-]
+# --- Use live active lineup (only 9 players currently in batting order) ---
+away_lineup_raw, home_lineup_raw = get_live_lineup(game_pk, starters_only=True) if game_pk else ([], [])
 
-# --- Lineup Processing ---
-def extract_lineup(lineup, team_name, allow_pitcher_in_lineup=False):
-    pitcher = next((p for p in lineup if " - P" in p), None)
-    hitters = [p for p in lineup if p != pitcher] if allow_pitcher_in_lineup else [p for p in lineup if " - P" not in p]
-    return pitcher, hitters[:9]
-
-# --- Pitcher Data Renderer ---
-def render_pitcher_data(pitcher_label):
-    if not pitcher_label:
-        st.write("Not announced yet.")
+# --- Scoreboard Render ---
+def render_scoreboard(game_pk):
+    state = get_game_state(game_pk)
+    if not state:
         return
-    clean_name = pitcher_label.replace(" - P", "").strip()
-    st.write(pitcher_label)
 
-    st.markdown("#### Pitch Arsenal")
-    arsenal = get_pitcher_stats(clean_name)
-    if arsenal is not None and not arsenal.empty:
-        st.dataframe(arsenal, use_container_width=True)
-    else:
-        st.warning("No pitch data found.")
+    inning = state.get("inning", "-")
+    half = state.get("half", "-")
+    count = state.get("count", "0-0")
+    outs = state.get("outs", 0)
+    bases = state.get("bases", [])
+    linescore = state.get("linescore", {})
+    away_team = linescore.get("away", {})
+    home_team = linescore.get("home", {})
 
-    st.markdown("#### Advanced Pitching Metrics")
-    adv_stats = get_advanced_pitching_metrics(clean_name)
-    if adv_stats is not None and not adv_stats.empty:
-        st.dataframe(adv_stats, use_container_width=True)
-    else:
-        st.warning("No advanced stats available.")
+    balls, strikes = map(int, count.split("-"))
 
-# --- UI Columns ---
+    # Emoji indicators
+    ball_icons = "🟢" * balls + "⚪️" * (3 - balls)
+    strike_icons = "🔴" * strikes + "⚪️" * (2 - strikes)
+    out_icons = "⚫️" * outs + "⚪️" * (3 - outs)
+
+    # Base diamonds
+    base_html = f"""
+    <div style='position: relative; width: 80px; height: 80px; margin: auto;'>
+        <div style='position: absolute; top: 0; left: 50%; transform: translate(-50%, -50%) rotate(45deg); 
+                    width: 20px; height: 20px; border: 2px solid #999; {"background-color:#0af;" if "2B" in bases else ""}'></div>
+        <div style='position: absolute; left: 0; top: 50%; transform: translate(-50%, -50%) rotate(45deg); 
+                    width: 20px; height: 20px; border: 2px solid #999; {"background-color:#0af;" if "3B" in bases else ""}'></div>
+        <div style='position: absolute; right: 0; top: 50%; transform: translate(50%, -50%) rotate(45deg); 
+                    width: 20px; height: 20px; border: 2px solid #999; {"background-color:#0af;" if "1B" in bases else ""}'></div>
+        <div style='position: absolute; bottom: 0; left: 50%; transform: translate(-50%, 50%) rotate(45deg); 
+                    width: 20px; height: 20px; border: 2px solid #ccc;'></div>
+    </div>
+    """
+
+    # Full scoreboard card
+    scoreboard_html = f"""
+    <div style="border: 1px solid #444; border-radius: 8px; padding: 16px; margin-bottom: 1.5rem;">
+        <h4 style="margin-bottom: 0.5rem;">{half.title()} {inning}</h4>
+        <div style="margin: 0.25rem 0;">
+    <strong>Count:</strong><br>
+    <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.4;">
+        <div><strong>Balls:</strong> {ball_icons}</div>
+        <div><strong>Strikes:</strong> {strike_icons}</div>
+    </div>
+        <p style="margin: 0.25rem 0;"><strong>Outs:</strong> {out_icons}</p>
+        <div style="margin-top: 1rem;">
+            <p style="margin: 0.25rem 0;"><strong>{away}</strong>: {away_team.get('runs', 0)} R / {away_team.get('hits', 0)} H / {away_team.get('xba', '.000')}</p>
+            <p style="margin: 0.25rem 0;"><strong>{home}</strong>: {home_team.get('runs', 0)} R / {home_team.get('hits', 0)} H / {home_team.get('xba', '.000')}</p>
+        </div>
+        {base_html}
+    </div>
+    """
+
+    st.markdown(scoreboard_html, unsafe_allow_html=True)
+
+
+if game_pk:
+    render_scoreboard(game_pk)
+
+# --- Extract Starters and Subs ---
+away_lineup = away_lineup_raw
+home_lineup = home_lineup_raw
+# Match total player count
+
+
+# --- Fallback Pitcher ---
+def fallback_pitcher_from_lineup(lineup):
+    return next((p.replace(" - P", "") for p in lineup if " - P" in p), "Not Announced")
+
+if not away_pitcher or away_pitcher == "Not Announced":
+    away_pitcher = fallback_pitcher_from_lineup(away_lineup)
+if not home_pitcher or home_pitcher == "Not Announced":
+    home_pitcher = fallback_pitcher_from_lineup(home_lineup)
+
+st.write("gamePk:", game_pk)
+
+# --- Lineup Renderer ---
+def render_lineup(pitcher_name, lineup, team_name):
+    pitch_types = []
+    arsenal_df = None
+
+    st.markdown(f"<h4 style='margin-bottom: 0.25rem;'>{team_name} Starting Pitcher</h4>", unsafe_allow_html=True)
+    st.markdown(f"<p style='margin-top: -0.5rem; margin-bottom: 0.5rem;'>{pitcher_name or 'Not announced yet.'}</p>", unsafe_allow_html=True)
+
+    st.markdown("<h4 style='margin-bottom: 0.5rem;'>Pitch Arsenal</h4>", unsafe_allow_html=True)
+
+    if pitcher_name and pitcher_name != "Not Announced":
+        arsenal_df = get_pitcher_stats(pitcher_name)
+        if isinstance(arsenal_df, pd.DataFrame) and not arsenal_df.empty:
+            desired_columns = ["pitch_type", "PA", "BA", "SLG", "wOBA", "K%", "Whiff%", "PutAway%"]
+            available_columns = [col for col in desired_columns if col in arsenal_df.columns]
+            display_df = arsenal_df[available_columns].fillna("-")
+            st.dataframe(
+                display_df.style
+                    .applymap(get_pitcher_blue_red_shade, subset=["BA", "SLG", "wOBA"])
+                    .applymap(lambda v: get_pitcher_red_green_shade(v, high_is_good=True), subset=["K%", "Whiff%", "PutAway%"]),
+                use_container_width=True
+            )
+            if "pitch_type" in display_df.columns:
+                pitch_types = display_df["pitch_type"].tolist()
+        else:
+            st.warning("No pitch data found.")
+
+    height = len(arsenal_df) if arsenal_df is not None else 0
+    return pitch_types, lineup, team_name, pitcher_name, height
+
+
+from concurrent.futures import ThreadPoolExecutor
+
+all_batters = [player.split(" - ")[0].strip() for player in away_lineup + home_lineup]
+
+# --- Batch Fetch Batter K% Stats ---
+def fetch_batter_k_rates(batters):
+    stats = {}
+
+    def fetch_and_store(batter):
+        stats[batter] = get_batter_k_rate_by_pitch(batter) or {}
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        executor.map(fetch_and_store, batters)
+
+    return stats
+
+# Gather all unique batters from both lineups
+all_batters = list({player.split(" - ")[0].strip() for player in away_lineup + home_lineup if player.strip()})
+
+# Fetch K% data for all batters in parallel
+k_rate_lookup = fetch_batter_k_rates(all_batters)
+
+
+# --- Batting Lineup Renderer ---
+def render_batting_lineup(pitch_types, pitcher_name, lineup, team_name, k_rate_lookup):
+    st.subheader(f"{team_name} Batting Lineup")
+
+    if not lineup:
+        st.info("Batting order not available yet.")
+        return
+
+    st.markdown("""<style>
+        .lineup-wrapper {
+            overflow-x: auto;
+            padding-bottom: 1rem;
+            max-width: 100%;
+        }
+
+        .lineup-table {
+            width: max-content;
+            min-width: 600px;
+            border-collapse: collapse;
+            font-family: monospace;
+            font-size: 13px;
+            table-layout: fixed;
+        }
+
+        .lineup-table th, .lineup-table td {
+            border: 1px solid #444;
+            padding: 6px 10px;
+            text-align: center;
+            white-space: nowrap;
+            color: white;  /* <--- ADDED THIS LINE */
+        }
+
+        .lineup-table th {
+            background-color: #1e1e1e;
+        }
+
+        .lineup-table tr:nth-child(even) {
+            background-color: #2a2a2a;
+        }
+
+        .lineup-table tr:hover {
+            background-color: #333333;
+        }
+
+        .lineup-table a {
+            color: #4da6ff;
+            text-decoration: none;
+        }
+
+        .lineup-table a:hover {
+            text-decoration: underline;
+        }
+
+        .lineup-table td:last-child,
+        .lineup-table th:last-child {
+            position: sticky;
+            right: 0;
+            background-color: #1e1e1e;
+            z-index: 1;
+        }
+
+        .lineup-table td:last-child::after,
+        .lineup-table th:last-child::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 4px;
+            background: linear-gradient(to right, rgba(0,0,0,0.15), transparent);
+        }
+
+        @media (max-width: 768px) {
+            .lineup-table {
+                font-size: 12px;
+                min-width: 100%;
+            }
+        }
+    </style>""", unsafe_allow_html=True)
+
+    # Table headers
+    headers = "<tr><th>#</th><th>Batter</th>"
+    for pitch in pitch_types:
+        headers += f"<th>{pitch} K%</th>"
+    headers += "<th>View Matchup</th></tr>"
+
+    rows = ""
+    for i, player in enumerate(lineup):
+        if player.strip() == "":
+            row = f"<tr><td>-</td><td>-</td>"
+            for _ in pitch_types:
+                row += "<td>-</td>"
+            row += "<td>-</td></tr>"
+            rows += row
+            continue
+
+        batter_name = player.split(" - ")[0].strip()
+        k_vals = k_rate_lookup.get(batter_name, {})
+
+        row = f"<tr><td>{i+1}</td><td><strong>{batter_name}</strong></td>"
+
+        for pitch in pitch_types:
+            val = k_vals.get(pitch, "0.0%")
+            style = get_red_shade(val)
+            row += f"<td style='{style}'>{val}</td>"
+
+        matchup_url = (
+            f"/matchup_view?batter={quote(batter_name)}"
+            f"&team={quote(team_name)}"
+            f"&home={quote(home)}"
+            f"&away={quote(away)}"
+            f"&home_pitcher={quote(home_pitcher)}"
+            f"&away_pitcher={quote(away_pitcher)}"
+        )
+
+        row += f"<td><a href='{matchup_url}'>View Matchup</a></td></tr>"
+
+        rows += row
+
+    table_html = f"""
+        <div class="lineup-wrapper">
+            <table class="lineup-table">
+                <thead>{headers}</thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
+    """
+    st.markdown(table_html, unsafe_allow_html=True)
+
+
+
+# --- Render Columns Side-by-Side ---
 col1, col2 = st.columns(2)
 
 with col1:
-    away_pitcher, away_hitters = extract_lineup(away_lineup, away)
-    st.subheader(f"{away} Starting Pitcher")
-    render_pitcher_data(away_pitcher)
+    pt_1, lu_1, tn_1, pn_1, h1 = render_lineup(away_pitcher, away_lineup, away)
+with col2:
+    pt_2, lu_2, tn_2, pn_2, h2 = render_lineup(home_pitcher, home_lineup, home)
 
-    st.subheader(f"{away} Batting Lineup")
-    if away_hitters:
-        for i, batter in enumerate(away_hitters, 1):
-            st.markdown(f"{i}. {batter}")
-    else:
-        st.info("Batting order not available yet.")
+max_h = max(h1, h2)
+
+with col1:
+    if h1 < max_h:
+        for _ in range(max_h - h1):
+            st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+    render_batting_lineup(pt_1, pn_1, away_lineup, away, k_rate_lookup)
 
 with col2:
-    include_pitcher_home = home in NATIONAL_LEAGUE_TEAMS
-    home_pitcher, home_hitters = extract_lineup(home_lineup, home, allow_pitcher_in_lineup=include_pitcher_home)
-    st.subheader(f"{home} Starting Pitcher")
-    render_pitcher_data(home_pitcher)
+    if h2 < max_h:
+        for _ in range(max_h - h2):
+            st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+    render_batting_lineup(pt_2, pn_2, home_lineup, home, k_rate_lookup)
 
-    st.subheader(f"{home} Batting Lineup")
-    if home_hitters:
-        for i, batter in enumerate(home_hitters, 1):
-            st.markdown(f"{i}. {batter}")
-    else:
-        st.info("Batting order not available yet.")
+    

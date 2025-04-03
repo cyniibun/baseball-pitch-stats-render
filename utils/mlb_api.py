@@ -1,13 +1,12 @@
-import requests
 from datetime import datetime
+import requests
 import pytz
+import pandas as pd
 
+# --- Fetch today's MLB schedule ---
 def fetch_today_schedule():
-    # Set timezone to Eastern Time
     eastern = pytz.timezone("US/Eastern")
     today = datetime.now(eastern).strftime("%Y-%m-%d")
-
-    # MLB API endpoint for the schedule
     url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={today}"
     response = requests.get(url)
     data = response.json()
@@ -22,11 +21,9 @@ def fetch_today_schedule():
                 "gameTime": game["gameDate"]
             })
     return games
-    print("[DEBUG] Fetched games from MLB API:", games)
 
-
+# --- Get player ID using the Stats API ---
 def get_player_id(first_name, last_name):
-    """Retrieve MLB player ID using Stats API search."""
     search_url = f"https://statsapi.mlb.com/api/v1/people/search?names={first_name}%20{last_name}"
     response = requests.get(search_url)
     if response.status_code == 200:
@@ -35,8 +32,8 @@ def get_player_id(first_name, last_name):
             return data["people"][0]["id"]
     return None
 
+# --- Get season pitching stats for a given pitcher ID ---
 def get_pitching_stats(player_id, season):
-    """Fetch season-to-date pitching stats for a given player."""
     url = f"https://statsapi.mlb.com/api/v1/people/{player_id}/stats?stats=season&season={season}&group=pitching"
     response = requests.get(url)
     if response.status_code == 200:
@@ -56,9 +53,8 @@ def get_pitching_stats(player_id, season):
             }
     return None
 
-
+# --- Calculate advanced pitching metrics from raw MLB API stats ---
 def calculate_advanced_metrics(stats):
-    """Calculate and collect pitching metrics."""
     try:
         whiff_rate = (
             (stats["numberOfPitches"] - stats["contactPitches"]) / stats["numberOfPitches"] * 100
@@ -90,8 +86,9 @@ def calculate_advanced_metrics(stats):
             "K%": "N/A",
             "PutAway%": "N/A"
         }
+
+# --- Combine name + advanced metric lookup ---
 def get_pitcher_advanced_metrics_by_name(full_name, season=None):
-    """Helper to go from name to advanced metrics dict."""
     try:
         first, last = full_name.strip().split(" ", 1)
         player_id = get_player_id(first, last)
@@ -107,6 +104,103 @@ def get_pitcher_advanced_metrics_by_name(full_name, season=None):
 
         return calculate_advanced_metrics(raw_stats)
     except Exception as e:
-        print(f"[ERROR] Failed to calculate metrics for {full_name}: {e}")
+        print(f"[ERROR] Failed to fetch advanced metrics for {full_name}: {e}")
         return {}
 
+# --- Placeholder for batter putaway by pitch type using MLB API ---
+def get_batter_putaway_by_pitch(batter_name):
+    # This is where you'd implement fetching detailed PITCHf/x data for the batter.
+    # It would require gathering all swings with 2 strikes and counting outs per pitch type.
+    # Placeholder returns static mock structure:
+    return {
+        "4-Seam Fastball": "23.5%",
+        "Slider": "31.8%",
+        "Changeup": "19.2%"
+    }
+def get_pitcher_arsenal_from_api(player_id, season=None):
+    """
+    Pulls per-pitch-type performance data (PutAway%, Whiff%, etc.) for a given pitcher.
+    NOTE: This is a placeholder; MLB API doesn't expose detailed per-pitch-type statcast data here.
+    """
+    # Normally you'd hit an endpoint like Baseball Savant’s but that's not available.
+    # You can replace this mock structure with scraped or cached data if needed.
+    pitch_data = {
+        "4-Seam Fastball": {"PA": 50, "PutAway%": 28.4},
+        "Slider": {"PA": 35, "PutAway%": 36.7},
+        "Changeup": {"PA": 20, "PutAway%": 22.1},
+    }
+
+    df = pd.DataFrame(pitch_data).T.reset_index().rename(columns={"index": "pitch_type"})
+    return df
+
+def get_probable_pitchers_for_date(date_str):
+    url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date_str}&hydrate=probablePitcher"
+    response = requests.get(url)
+    data = response.json()
+
+    probable_pitchers = {}
+    for date_info in data.get("dates", []):
+        for game in date_info.get("games", []):
+            home_team = game["teams"]["home"]["team"]["name"]
+            away_team = game["teams"]["away"]["team"]["name"]
+            home_pitcher = game["teams"]["home"].get("probablePitcher", {}).get("fullName", "Not Announced")
+            away_pitcher = game["teams"]["away"].get("probablePitcher", {}).get("fullName", "Not Announced")
+
+            key = f"{away_team} @ {home_team}"
+            probable_pitchers[key] = {
+                "home_pitcher": home_pitcher,
+                "away_pitcher": away_pitcher
+            }
+
+    return probable_pitchers
+def get_game_state(game_pk):
+    url = f"https://statsapi.mlb.com/api/v1.1/game/{game_pk}/feed/live"
+    resp = requests.get(url)
+    if not resp.ok:
+        return None
+
+    data = resp.json()
+
+    try:
+        inning = data["liveData"]["linescore"]["currentInning"]
+        half = data["liveData"]["linescore"]["inningState"]
+        count_data = data["liveData"]["plays"]["currentPlay"]["count"]
+        count = f"{count_data.get('balls', 0)}-{count_data.get('strikes', 0)}"
+        outs = count_data.get("outs", 0)
+
+        bases = []
+        runners = data["liveData"]["plays"]["currentPlay"].get("runners", [])
+        for r in runners:
+            base = r.get("movement", {}).get("end", "")
+            if base == "1B":
+                bases.append("1B")
+            elif base == "2B":
+                bases.append("2B")
+            elif base == "3B":
+                bases.append("3B")
+
+        linescore = {
+            "away": {
+                "runs": data["liveData"]["linescore"]["teams"]["away"]["runs"],
+                "hits": data["liveData"]["linescore"]["teams"]["away"]["hits"],
+                "xba": ".000"  # Placeholder for xBA
+            },
+            "home": {
+                "runs": data["liveData"]["linescore"]["teams"]["home"]["runs"],
+                "hits": data["liveData"]["linescore"]["teams"]["home"]["hits"],
+                "xba": ".000"
+            }
+        }
+
+        return {
+            "inning": inning,
+            "half": half,
+            "count": count,
+            "outs": outs,
+            "bases": bases,
+            "linescore": linescore
+        }
+
+    except Exception as e:
+        print(f"[ERROR] Failed to parse game state: {e}")
+        return None
