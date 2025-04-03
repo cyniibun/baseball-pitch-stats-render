@@ -1,3 +1,4 @@
+
 import sys
 import os
 
@@ -9,7 +10,7 @@ import pandas as pd
 from urllib.parse import unquote
 from datetime import datetime
 from utils.stat_utils import get_pitcher_stats, get_batter_metrics_by_pitch
-from utils.style_helpers import style_pitcher_table, style_batter_table, style_delta_table
+from utils.style_helpers import style_pitcher_table, style_batter_table, style_delta_table, sanitize_numeric_columns
 from utils.mlb_api import get_player_id
 
 st.set_page_config(page_title="Batter vs Pitcher Matchup", layout="wide")
@@ -61,6 +62,11 @@ batter_df = get_batter_metrics_by_pitch(batter_id, start_date=start_date, end_da
 if pitcher_df.empty or batter_df.empty:
     st.warning("Insufficient data to display matchup.")
 else:
+    # Sanitize numeric columns
+    numeric_cols = ["BA", "SLG", "wOBA", "K%", "Whiff%", "PutAway%"]
+    pitcher_df = sanitize_numeric_columns(pitcher_df, numeric_cols)
+    batter_df = sanitize_numeric_columns(batter_df, numeric_cols)
+
     batter_df = batter_df.round(2)
     pitcher_df = pitcher_df.round(2)
 

@@ -1,6 +1,11 @@
-import streamlit as st
+from datetime import datetime
 from utils.mlb_api import get_game_state
+from utils.schedule_utils import get_schedule
 from streamlit_autorefresh import st_autorefresh
+import streamlit as st
+import pytz
+import pandas as pd
+import textwrap
 
 def render_scoreboard(game_pk, home_team="Home", away_team="Away", autorefresh=True):
     if autorefresh:
@@ -8,10 +13,10 @@ def render_scoreboard(game_pk, home_team="Home", away_team="Away", autorefresh=T
 
     state = get_game_state(game_pk)
     if not state:
-        st.info("Live data not available.")
+        st.info("Awaiting MLB live data feed.")
         return
 
-    # Default values
+    # --- Extract State Info ---
     status = ""
     is_final = False
     is_walkoff = False
@@ -19,18 +24,16 @@ def render_scoreboard(game_pk, home_team="Home", away_team="Away", autorefresh=T
     half = state.get("half", "").lower()
     count = state.get("count", "0-0")
     outs = state.get("outs", 0)
-    bases = state.get("bases", [])
     linescore = state.get("linescore", {})
     away = linescore.get("away", {})
     home = linescore.get("home", {})
     away_score = away.get("runs", 0)
     home_score = home.get("runs", 0)
 
-    # Final status from API
     if "status" in state:
         status = state["status"].get("detailedState", "").lower()
 
-    # Check official or inferred final status
+    # --- Final Game Detection ---
     if status in ["final", "completed", "game over", "postgame", "completed early"]:
         is_final = True
     elif half == "bottom" and outs == 3 and inning >= 9:
@@ -41,14 +44,12 @@ def render_scoreboard(game_pk, home_team="Home", away_team="Away", autorefresh=T
         is_final = True
         is_walkoff = True
     elif half == "bottom" and inning >= 9 and home_score > away_score:
-        # ✅ OVERRIDE: Home team wins before 3rd out — walk-off win
         is_final = True
         is_walkoff = True
 
-    # ✅ Final Game Handling with Icons and Inning Label
+    # --- Final Game Render ---
     if is_final:
         final_label = f"F/{inning}" if inning > 9 else "Final"
-
         if home_score > away_score:
             winner = "home"
             home_icon, away_icon = "🏆", "❌"
@@ -58,63 +59,73 @@ def render_scoreboard(game_pk, home_team="Home", away_team="Away", autorefresh=T
         else:
             winner = "tie"
             home_icon = away_icon = "⚔️"
-
         if is_walkoff:
             home_icon += " 🚩"
 
-        winner_style = "color: #0af; font-weight: bold;"
-        loser_style = "color: #999;"
-        tie_style = "color: #ccc; font-style: italic;"
+        style = {
+            "win": "color: #0af; font-weight: bold;",
+            "loss": "color: #999;",
+            "tie": "color: #ccc; font-style: italic;"
+        }
 
-        home_style = winner_style if winner == "home" else loser_style
-        away_style = winner_style if winner == "away" else loser_style
-        if winner == "tie":
-            home_style = away_style = tie_style
+        home_style = style["tie"] if winner == "tie" else style["win"] if winner == "home" else style["loss"]
+        away_style = style["tie"] if winner == "tie" else style["win"] if winner == "away" else style["loss"]
 
-        st.markdown(f"""
-        <div style="border: 1px solid #444; border-radius: 8px; padding: 16px; margin: 0.5rem 0 1.5rem 0;">
-            <h4 style="margin-bottom: 0.5rem; text-align: center;">{final_label}</h4>
-            <p style="{away_style}">{away_icon} <strong>{away_team}</strong>: {away_score} R</p>
-            <p style="{home_style}">{home_icon} <strong>{home_team}</strong>: {home_score} R</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(textwrap.dedent(f"""
+            <div style="border: 1px solid #444; border-radius: 8px; padding: 16px; margin: 0.5rem 0 1.5rem 0;">
+                <h4 style="margin-bottom: 0.5rem; text-align: center;">{final_label}</h4>
+                <p style="{away_style}">{away_icon} <strong>{away_team}</strong>: {away_score} R</p>
+                <p style="{home_style}">{home_icon} <strong>{home_team}</strong>: {home_score} R</p>
+            </div>
+        """), unsafe_allow_html=True)
         return
 
-    # ✅ Live Game Handling
-    balls, strikes = map(int, count.split("-"))
-    ball_icons = "🟢" * balls + "⚪️" * (3 - balls)
-    strike_icons = "🔴" * strikes + "⚪️" * (2 - strikes)
-    out_icons = "⚫️" * outs + "⚪️" * (3 - outs)
+    # --- Scheduled Time Display ---
+    game_time_display = "Scheduled"
+    schedule_df = get_schedule()
+    game_row = schedule_df[schedule_df["gamePk"] == game_pk]
+    if not game_row.empty:
+        try:
+            est = pytz.timezone("US/Eastern")
+            scheduled_time = pd.to_datetime(game_row.iloc[0]["Date"]).tz_convert(est)
+            game_time_display = f"Scheduled: {scheduled_time.strftime('%I:%M %p EST')}"
+        except Exception:
+            pass
 
-    scoreboard_html = f"""
-    <div style="border: 1px solid #444; border-radius: 8px; padding: 16px; margin: 0.5rem 0 1.5rem 0;">
-        <h4 style="margin-bottom: 0.5rem; text-align: center;">{half.title()} {inning}</h4>
-        <div style="display: flex; justify-content: center;">
-            <div style="display: flex; flex-direction: row; align-items: center; gap: 36px; flex-wrap: wrap; max-width: 800px;">
-                <div style="min-width: 240px;">
-                    <strong>Count:</strong><br>
-                    <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.4;">
-                        <div><strong>Balls:</strong> {ball_icons}</div>
-                        <div><strong>Strikes:</strong> {strike_icons}</div>
-                    </div>
-                    <p style="margin: 0.25rem 0;"><strong>Outs:</strong> {out_icons}</p>
-                    <div style="margin-top: 1rem;">
-                        <p style="margin: 0.25rem 0;"><strong>{away_team}</strong>: {away_score} R / {away.get('hits', 0)} H / {away.get('xba', '.000')}</p>
-                        <p style="margin: 0.25rem 0;"><strong>{home_team}</strong>: {home_score} R / {home.get('hits', 0)} H / {home.get('xba', '.000')}</p>
-                    </div>
-                </div>
-                <div style='position: relative; width: 80px; height: 80px;'>
-                    <div style='position: absolute; top: 0; left: 50%; transform: translate(-50%, -50%) rotate(45deg);
-                        width: 20px; height: 20px; border: 2px solid #999; {"background-color:#0af;" if "2B" in bases else ""}'></div>
-                    <div style='position: absolute; left: 0; top: 50%; transform: translate(-50%, -50%) rotate(45deg);
-                        width: 20px; height: 20px; border: 2px solid #999; {"background-color:#0af;" if "3B" in bases else ""}'></div>
-                    <div style='position: absolute; right: 0; top: 50%; transform: translate(50%, -50%) rotate(45deg);
-                        width: 20px; height: 20px; border: 2px solid #999; {"background-color:#0af;" if "1B" in bases else ""}'></div>
-                    <div style='position: absolute; bottom: 0; left: 50%; transform: translate(-50%, 50%) rotate(45deg);
-                        width: 20px; height: 20px; border: 2px solid #ccc;'></div>
-                </div>
-            </div>
+    # --- Determine Game State ---
+    has_real_activity = any([
+        outs > 0,
+        count != "0-0",
+        away.get("hits", 0) > 0,
+        home.get("hits", 0) > 0,
+        away_score > 0,
+        home_score > 0,
+    ])
+    is_scheduled = status in ["scheduled", "pre-game", "pre game"]
+
+    if is_scheduled or (inning <= 1 and not has_real_activity):
+        display_title = game_time_display
+    elif half in ["top", "bottom"]:
+        display_title = f"{half.title()} {inning}"
+    else:
+        display_title = game_time_display
+
+    # --- Optional Count Section ---
+    balls, strikes = map(int, count.split("-"))
+    if not is_scheduled and (inning > 1 or has_real_activity):
+        count_html = f"""
+        <strong>Count:</strong><br>
+        <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.4;">
+            <div><strong>Balls:</strong> {'🟢' * balls + '⚪️' * (3 - balls)}</div>
+            <div><strong>Strikes:</strong> {'🔴' * strikes + '⚪️' * (2 - strikes)}</div>
         </div>
-    </div>
+        <p style="margin: 0.25rem 0;"><strong>Outs:</strong> {'⚫️' * outs + '⚪️' * (3 - outs)}</p>
     """
-    st.markdown(scoreboard_html, unsafe_allow_html=True)
+    else:
+        count_html = ""
+
+    # --- Final Scoreboard HTML ---
+    # --- Final Scoreboard Display ---
+    st.markdown(f'<div style="border:1px solid #444;border-radius:8px;padding:16px;margin:0.5rem 0 1.5rem 0;"><h4 style="margin-bottom:0.5rem;text-align:center;">{display_title}</h4><div style="display:flex;justify-content:center;"><div style="display:flex;flex-direction:row;align-items:center;gap:36px;flex-wrap:wrap;max-width:800px;"><div style="min-width:240px;">{count_html}<p style="margin:0.25rem 0;"><strong>{away_team}</strong>: {away_score} R / {away.get("hits", 0)} H / {away.get("xba", ".000")}</p><p style="margin:0.25rem 0;"><strong>{home_team}</strong>: {home_score} R / {home.get("hits", 0)} H / {home.get("xba", ".000")}</p></div></div></div></div>', unsafe_allow_html=True)
+
+

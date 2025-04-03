@@ -9,6 +9,7 @@ from utils.style_utils import get_red_shade, get_pitcher_red_green_shade, get_pi
 from utils.lineup_utils import get_game_lineups, get_lineup_for_game, get_live_lineup, get_official_lineups
 from utils.stat_utils import get_pitcher_stats, get_batter_k_rate_by_pitch
 from utils.mlb_api import get_probable_pitchers_for_date, get_game_state
+from utils.style_helpers import sanitize_numeric_columns
 from utils.scoreboard_utils import render_scoreboard
 import streamlit as st
 from urllib.parse import unquote, quote
@@ -91,13 +92,18 @@ def render_lineup(pitcher_name, lineup, team_name):
         if isinstance(arsenal_df, pd.DataFrame) and not arsenal_df.empty:
             desired_columns = ["pitch_type", "PA", "BA", "SLG", "wOBA", "K%", "Whiff%", "PutAway%"]
             available_columns = [col for col in desired_columns if col in arsenal_df.columns]
+
+            # ✅ Sanitize numeric columns
+            arsenal_df = sanitize_numeric_columns(arsenal_df, ["BA", "SLG", "wOBA", "K%", "Whiff%", "PutAway%"])
+
             display_df = arsenal_df[available_columns].fillna("-")
             st.dataframe(
                 display_df.style
-                    .applymap(get_pitcher_blue_red_shade, subset=["BA", "SLG", "wOBA"])
-                    .applymap(lambda v: get_pitcher_red_green_shade(v, high_is_good=True), subset=["K%", "Whiff%", "PutAway%"]),
-                use_container_width=True
+                    .map(get_pitcher_blue_red_shade, subset=["BA", "SLG", "wOBA"])
+                    .map(lambda v: get_pitcher_red_green_shade(v, high_is_good=True), subset=["K%", "Whiff%", "PutAway%"]),
+            use_container_width=True
             )
+
             if "pitch_type" in display_df.columns:
                 pitch_types = display_df["pitch_type"].tolist()
         else:
